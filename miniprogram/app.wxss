@@ -1,0 +1,123 @@
+/* 全局样式 · 取自原型图配色与质感 */
+page {
+  background: #ded9cd;
+  color: #232019;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-size: 28rpx;
+}
+
+.serif {
+  font-family: "Songti SC", "STSong", "SimSun", serif;
+}
+
+.paper {
+  background: #f8f5ee;
+}
+
+.card {
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 30rpx;
+  box-shadow: 0 6rpx 28rpx rgba(60, 50, 30, 0.06);
+}
+
+.tag {
+  display: inline-block;
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 40rpx;
+  background: #f1ece0;
+  color: #7a7263;
+  margin-right: 10rpx;
+}
+
+.sec-title {
+  display: flex;
+  align-items: center;
+  font-size: 28rpx;
+  font-weight: 700;
+  margin: 36rpx 32rpx 18rpx;
+}
+.sec-title::before {
+  content: "";
+  width: 6rpx;
+  height: 28rpx;
+  background: #b0392c;
+  border-radius: 4rpx;
+  margin-right: 16rpx;
+}
+.sec-title .more {
+  margin-left: auto;
+  font-size: 22rpx;
+  color: #9a9384;
+  font-weight: 400;
+}
+
+.btn-primary {
+  text-align: center;
+  background: #232019;
+  color: #f3ecdc;
+  border-radius: 48rpx;
+  padding: 24rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.muted {
+  color: #9a9384;
+}
+.red {
+  color: #b0392c;
+}
+
+/* 等级徽章分档配色：等级越高辨识度越强（t1 最朴素 → t5 金光最醒目）。
+   仅负责底色/字色/光晕，尺寸由各处 .pbadge / .lv-badge 自行决定。 */
+.lv-t1 {
+  background: #ece6d8;
+  color: #8c8577;
+}
+.lv-t2 {
+  background: linear-gradient(135deg, #e0ebd9, #cadcc0);
+  color: #4f6a46;
+}
+.lv-t3 {
+  background: linear-gradient(135deg, #dde7f1, #c4d6ea);
+  color: #3b5a7e;
+  box-shadow: 0 2rpx 8rpx rgba(59, 90, 126, 0.18);
+}
+.lv-t4 {
+  background: linear-gradient(135deg, #7a2a20, #b0392c);
+  color: #fff4e2;
+  box-shadow: 0 2rpx 10rpx rgba(176, 57, 44, 0.4);
+}
+.lv-t5 {
+  background: linear-gradient(135deg, #b8860b 0%, #f3d272 45%, #e8b949 55%, #b8860b 100%);
+  color: #5a3d00;
+  font-weight: 700;
+  box-shadow: 0 2rpx 16rpx rgba(201, 162, 39, 0.6);
+}
+
+/* 会员皇冠徽章：与等级徽章并列展示，金色流光。 */
+.crown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4rpx;
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #5a3d00;
+  background: linear-gradient(135deg, #b8860b 0%, #f3d272 45%, #e8b949 55%, #b8860b 100%);
+  padding: 2rpx 12rpx;
+  border-radius: 10rpx;
+  margin-left: 8rpx;
+  box-shadow: 0 2rpx 10rpx rgba(201, 162, 39, 0.45);
+}
+.crown-badge.lg {
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 30rpx;
+  margin-left: 0;
+}
+.crown-badge.sm {
+  font-size: 16rpx;
+  padding: 1rpx 10rpx;
+}

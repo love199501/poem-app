@@ -1,0 +1,263 @@
+.home {
+  min-height: 100vh;
+  background: #f8f5ee;
+  padding-bottom: 40rpx;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 16rpx 32rpx 8rpx;
+}
+.brand {
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 8rpx;
+}
+.search {
+  flex: 1;
+  background: #fff;
+  border-radius: 36rpx;
+  padding: 16rpx 26rpx;
+  font-size: 22rpx;
+  color: #a8a294;
+}
+
+/* 时辰问候 */
+.greet {
+  padding: 18rpx 36rpx 6rpx;
+  display: flex;
+  align-items: baseline;
+  gap: 18rpx;
+}
+.greet-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: #2b2822;
+}
+.greet-sub {
+  font-size: 23rpx;
+  color: #9a9080;
+}
+
+/* 滑动诗卡 */
+.deck-wrap {
+  margin-top: 14rpx;
+}
+.deck {
+  height: 520rpx;
+}
+.deck-item {
+  box-sizing: border-box;
+  padding: 18rpx 10rpx;
+}
+.pcard {
+  position: relative;
+  height: 100%;
+  border-radius: 40rpx;
+  overflow: hidden;
+  color: #f0e8d6;
+  background: linear-gradient(150deg, #2b2822 0%, #464032 55%, #5d4c36 100%);
+  box-shadow: 0 12rpx 36rpx rgba(40, 32, 20, 0.16);
+  transform: scale(0.9);
+  opacity: 0.5;
+  transition: transform 0.32s ease, opacity 0.32s ease;
+}
+.pcard.active {
+  transform: scale(1);
+  opacity: 1;
+}
+.pcard-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.62;
+}
+.pcard-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(26, 23, 18, 0.9) 0%, rgba(40, 36, 28, 0.6) 52%, rgba(52, 44, 30, 0.38) 100%);
+}
+.pcard-inner {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 44rpx 40rpx 38rpx;
+  display: flex;
+  flex-direction: column;
+}
+.pcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pcard-dyn {
+  font-size: 20rpx;
+  letter-spacing: 3rpx;
+  color: #c9b78f;
+}
+.pcard-audio {
+  font-size: 20rpx;
+  color: #e6d2a6;
+  border: 1rpx solid rgba(240, 232, 214, 0.42);
+  border-radius: 40rpx;
+  padding: 6rpx 16rpx;
+}
+.pcard-verse {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+}
+.pcard-verse-tx {
+  font-size: 46rpx;
+  line-height: 1.55;
+  letter-spacing: 4rpx;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pcard-foot {
+  margin-top: auto;
+}
+.pcard-meta {
+  font-size: 23rpx;
+  color: #c3b795;
+}
+.pcard-tags {
+  margin-top: 14rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.pcard-tag {
+  font-size: 19rpx;
+  color: #e8dcbd;
+  background: rgba(240, 232, 214, 0.14);
+  border: 1rpx solid rgba(240, 232, 214, 0.28);
+  border-radius: 30rpx;
+  padding: 5rpx 16rpx;
+}
+.pcard-bottom {
+  margin-top: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.pcard-stat {
+  display: flex;
+  gap: 12rpx;
+}
+.ps {
+  display: inline-flex;
+  align-items: center;
+  gap: 7rpx;
+  background: rgba(240, 232, 214, 0.14);
+  border: 1rpx solid rgba(240, 232, 214, 0.24);
+  border-radius: 30rpx;
+  padding: 6rpx 16rpx;
+}
+.ps-ic {
+  font-size: 22rpx;
+  line-height: 1;
+}
+.ps-ic.heart {
+  color: #ff8f7e;
+}
+.ps-ic.star {
+  color: #f3d272;
+}
+.ps-n {
+  font-size: 21rpx;
+  font-weight: 600;
+  color: #f0e8d6;
+}
+.pcard-cta {
+  flex: none;
+  font-size: 21rpx;
+  color: #e6d2a6;
+  border: 1rpx solid rgba(240, 232, 214, 0.42);
+  border-radius: 40rpx;
+  padding: 8rpx 20rpx;
+}
+
+/* 页码 + 换一换 */
+.deck-bar {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 40rpx 0;
+}
+.dots {
+  display: flex;
+  gap: 10rpx;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #d8d0bf;
+  transition: all 0.25s ease;
+}
+.dot.on {
+  width: 28rpx;
+  border-radius: 8rpx;
+  background: #b0392c;
+}
+.deck-info {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+.deck-count {
+  font-size: 22rpx;
+  color: #9a9080;
+}
+.deck-swap {
+  font-size: 22rpx;
+  color: #b0392c;
+  border: 1rpx solid rgba(176, 57, 44, 0.4);
+  border-radius: 40rpx;
+  padding: 8rpx 20rpx;
+}
+
+/* 心情速选（横向滚动） */
+.moods {
+  white-space: nowrap;
+  padding: 0 32rpx;
+}
+.mood {
+  display: inline-block;
+  vertical-align: top;
+  width: 128rpx;
+  margin-right: 16rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx 0 20rpx;
+  text-align: center;
+  box-shadow: 0 6rpx 20rpx rgba(60, 50, 30, 0.06);
+}
+.mood-ic {
+  display: block;
+  font-size: 40rpx;
+  margin-bottom: 10rpx;
+}
+.mood-tx {
+  font-size: 22rpx;
+  color: #6b655a;
+}
+
+.lib-entry {
+  margin: 0 32rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  font-size: 24rpx;
+  color: #6b655a;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}

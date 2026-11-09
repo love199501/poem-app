@@ -1,0 +1,106 @@
+<view class="profile-page">
+  <!-- 顶部：头像 + 昵称 + 身份等级 / 会员皇冠 -->
+  <view class="profile">
+    <view class="pav-wrap">
+      <view class="pav serif" style="{{user ? 'background:' + user.avatarColor : ''}}">{{user?user.avatarChar:'诗'}}</view>
+      <text wx:if="{{user.isMember}}" class="pav-crown">👑</text>
+    </view>
+    <view class="pinfo">
+      <view class="pn">{{user?user.nickname:'未登录'}}</view>
+      <view wx:if="{{user}}" class="p-ids">
+        <view class="pbadge {{badgeTier}}" bindtap="openRanks">
+          <text class="lv">Lv.{{user.level}}</text>
+          <text class="title serif">{{user.levelName}}</text>
+          <text class="hint">ⓘ</text>
+        </view>
+        <text wx:if="{{user.isMember}}" class="crown-badge lg">👑 会员</text>
+      </view>
+      <view wx:else class="ps">点击任意操作自动登录</view>
+    </view>
+  </view>
+
+  <!-- 等级进度 -->
+  <view wx:if="{{user}}" class="level-card">
+    <view class="lc-top">
+      <text class="lc-exp">经验 {{user.exp}}</text>
+      <text wx:if="{{user.isMax}}" class="lc-next">已达最高身份 · 诗仙</text>
+      <text wx:else class="lc-next">距「{{nextName}}」还需 {{toNext}}</text>
+    </view>
+    <view class="lc-bar"><view class="lc-i" style="width:{{progress}}%"></view></view>
+    <view wx:if="{{!user.isMax}}" class="lc-sub">{{expInLevel}} / {{expNeed}}</view>
+  </view>
+
+  <!-- 会员 -->
+  <view wx:if="{{user}}" class="member-card {{user.isMember?'on':''}}">
+    <view class="mc-left">
+      <text class="mc-crown">👑</text>
+      <view class="mc-info">
+        <view class="mc-title">{{user.isMember ? '尊享会员' : (user.memberClaimed ? '会员已到期' : '开通会员')}}</view>
+        <view class="mc-sub">{{memberText}}</view>
+      </view>
+    </view>
+    <view wx:if="{{!user.memberClaimed}}" class="mc-btn" bindtap="claimMember">免费领取</view>
+    <view wx:elif="{{user.isMember}}" class="mc-tag">有效中</view>
+    <view wx:else class="mc-tag off">已过期</view>
+  </view>
+
+  <!-- 统计（收藏/评论/被赞可点击查看列表） -->
+  <view class="stat-row">
+    <view class="st"><view class="sn serif">{{stat.readMinutes}}</view><view class="sl">阅读(分)</view></view>
+    <view class="st tap" bindtap="goList" data-type="favorites"><view class="sn serif">{{stat.favoriteCount}}</view><view class="sl">收藏 ›</view></view>
+    <view class="st tap" bindtap="goList" data-type="comments"><view class="sn serif">{{stat.commentCount}}</view><view class="sl">评论 ›</view></view>
+    <view class="st tap" bindtap="goList" data-type="likes"><view class="sn serif">{{stat.likeReceived}}</view><view class="sl">被赞 ›</view></view>
+  </view>
+
+  <!-- 今日任务 -->
+  <view wx:if="{{user}}" class="sec-title">
+    今日任务
+    <text class="more">经验 {{taskGot}}/{{taskTotal}}</text>
+  </view>
+  <view wx:if="{{user}}" class="tasks">
+    <view wx:for="{{tasks}}" wx:key="task" class="task {{item.done?'done':''}}">
+      <view class="tk-ic">{{item.icon}}</view>
+      <view class="tk-main">
+        <view class="tk-top">
+          <text class="tk-title">{{item.title}}</text>
+          <text wx:if="{{item.done}}" class="tk-exp">已完成</text>
+        </view>
+        <view class="tk-desc">{{item.desc}}，每{{item.task==='read'?'分钟':'次'}} +{{item.perExp}} 经验 · 每日上限 {{item.cap}}{{item.task==='read'?'分钟':'次'}}</view>
+        <view class="tk-bar"><view class="tk-i" style="width:{{item.pct}}%"></view></view>
+      </view>
+      <view class="tk-right">
+        <text class="tk-cnt">{{item.count}}/{{item.cap}}</text>
+        <text class="tk-got">+{{item.exp}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="tip">完成今日任务累积经验，逐级晋升身份 · 点击身份徽章查看阶梯</view>
+</view>
+
+<!-- 身份阶梯弹层 -->
+<view class="rank-mask {{showRanks?'show':''}}" bindtap="closeRanks">
+  <view class="rank-sheet" catchtap="noop">
+    <view class="rank-hd">
+      <text class="rank-title serif">身份阶梯</text>
+      <text class="rank-desc">经验累积，逐级晋升</text>
+    </view>
+    <scroll-view scroll-y class="rank-list">
+      <view
+        wx:for="{{ranks}}"
+        wx:key="level"
+        class="rank-row {{item.reached?'':'locked'}} {{item.current?'cur':''}}"
+      >
+        <text class="rank-badge {{item.tier}}">Lv.{{item.level}}</text>
+        <view class="rank-info">
+          <text class="rank-name serif">{{item.name}}</text>
+          <text class="rank-note">{{item.note}}</text>
+        </view>
+        <text wx:if="{{item.current}}" class="rank-mk cur">★ 当前</text>
+        <text wx:elif="{{item.reached}}" class="rank-mk ok">✓</text>
+        <text wx:else class="rank-mk lock">🔒</text>
+      </view>
+    </scroll-view>
+    <view class="rank-btn" bindtap="closeRanks">知道了</view>
+  </view>
+</view>

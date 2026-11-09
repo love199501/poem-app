@@ -1,0 +1,62 @@
+<view class="lib">
+  <!-- 搜索 -->
+  <view class="search">
+    <input class="search-input" placeholder="搜索诗 / 诗人 / 名句" value="{{keyword}}"
+           bindinput="onInput" bindconfirm="onSearch" confirm-type="search" />
+    <text class="search-btn" bindtap="onSearch">搜索</text>
+  </view>
+
+  <!-- 筛选 -->
+  <view class="filter">
+    <view class="f-row">
+      <text class="f-k">朝代</text>
+      <scroll-view scroll-x class="chips">
+        <text wx:for="{{dynasties}}" wx:key="*this" data-v="{{item}}" bindtap="pickDynasty"
+              class="chip {{dynasty===item?'on':''}}">{{item}}</text>
+      </scroll-view>
+    </view>
+    <view class="f-row">
+      <text class="f-k">心情</text>
+      <scroll-view scroll-x class="chips">
+        <text wx:for="{{moods}}" wx:key="*this" data-v="{{item}}" bindtap="pickMood"
+              class="chip {{mood===item?'on':''}}">{{item}}</text>
+      </scroll-view>
+    </view>
+    <view wx:if="{{authors.length > 1}}" class="f-row">
+      <text class="f-k">诗人</text>
+      <scroll-view scroll-x class="chips">
+        <text wx:for="{{authors}}" wx:key="*this" data-v="{{item}}" bindtap="pickAuthor"
+              class="chip {{author===item?'on':''}}">{{item}}</text>
+      </scroll-view>
+    </view>
+    <view wx:if="{{tags.length > 1}}" class="f-row">
+      <text class="f-k">标签</text>
+      <scroll-view scroll-x class="chips">
+        <text wx:for="{{tags}}" wx:key="*this" data-v="{{item}}" bindtap="pickTag"
+              class="chip {{tag===item?'on':''}}">{{item}}</text>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view class="sec-title">诗单 <text class="more">共 {{poems.length}} 首</text></view>
+
+  <!-- 列表 -->
+  <view wx:for="{{poems}}" wx:key="id" class="item" data-id="{{item.id}}" bindtap="goDetail">
+    <view class="li-main">
+      <view class="li-t serif">{{item.title}}</view>
+      <view class="li-a">{{item.dynasty}} · {{item.author}} · {{item.form}} · {{item.yearLabel}}</view>
+      <view class="li-v serif">{{item.firstVerse}}</view>
+      <view class="li-tags">
+        <text wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this" class="tag">{{t}}</text>
+      </view>
+      <view class="li-pop">
+        <text class="lp">♡ {{item.likeCount || 0}}</text>
+        <text class="lp">★ {{item.favoriteCount || 0}}</text>
+        <text class="lp">💬 {{item.commentCount || 0}}</text>
+      </view>
+    </view>
+    <text class="li-m">›</text>
+  </view>
+
+  <view wx:if="{{!loading && poems.length===0}}" class="empty">没有匹配的诗词</view>
+</view>

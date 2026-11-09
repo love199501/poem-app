@@ -1,0 +1,145 @@
+.list-page {
+  min-height: 100vh;
+  background: #f8f5ee;
+  padding: 24rpx 32rpx 40rpx;
+}
+.hint {
+  text-align: center;
+  color: #9a9384;
+  font-size: 24rpx;
+  margin-top: 80rpx;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 160rpx;
+}
+.empty-ic {
+  font-size: 80rpx;
+  opacity: 0.5;
+}
+.empty-tx {
+  font-size: 28rpx;
+  color: #6b655a;
+  margin-top: 24rpx;
+}
+.empty-sub {
+  font-size: 22rpx;
+  color: #a8a194;
+  margin-top: 12rpx;
+}
+
+/* 收藏诗卡 */
+.pcard {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 22rpx;
+  margin-bottom: 18rpx;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+.pc-img {
+  width: 120rpx;
+  height: 120rpx;
+  flex: none;
+  border-radius: 18rpx;
+  background: #ece6d8;
+}
+.pc-img-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b7ac94;
+  font-size: 40rpx;
+}
+.pc-main {
+  flex: 1;
+  min-width: 0;
+}
+.pc-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 3rpx;
+}
+.pc-meta {
+  font-size: 21rpx;
+  color: #9a9384;
+  margin: 8rpx 0 10rpx;
+}
+.pc-verse {
+  font-size: 23rpx;
+  color: #6b655a;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pc-pop {
+  font-size: 20rpx;
+  color: #a8a194;
+  margin-top: 10rpx;
+}
+.pc-arrow {
+  flex: none;
+  color: #c9c2b3;
+  font-size: 40rpx;
+}
+
+/* 评论卡 */
+.ccard {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 26rpx;
+  margin-bottom: 18rpx;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+.cc-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.cc-poem {
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #b0392c;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cc-date {
+  flex: none;
+  font-size: 19rpx;
+  color: #a8a194;
+}
+.cc-content {
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #3a352c;
+  margin: 16rpx 0;
+}
+.cc-foot {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+.cc-like {
+  font-size: 22rpx;
+  color: #b0392c;
+}
+.cc-badge {
+  font-size: 18rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 10rpx;
+}
+.cc-badge.gold {
+  background: #c9a227;
+  color: #fff;
+}
+.cc-go {
+  margin-left: auto;
+  font-size: 21rpx;
+  color: #9a9384;
+}

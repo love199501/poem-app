@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>诗境 · 管理后台</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#ded9cd;color:#232019;padding:24px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-family:"Songti SC",serif;font-size:22px;letter-spacing:.08em;margin-bottom:4px}
+.sub{color:#8a8477;font-size:13px;margin-bottom:20px}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 6px 24px rgba(60,50,30,.08)}
+.row{display:flex;gap:18px;align-items:flex-start}
+.col-list{flex:1;min-width:0}
+.col-edit{flex:1.25;min-width:0}
+input,textarea,button{font-family:inherit;font-size:13px}
+input{width:100%;padding:9px 12px;border:1px solid #e2dccd;border-radius:8px;background:#fcfaf4}
+label{display:block;font-size:12px;color:#8a8477;margin:12px 0 4px}
+textarea{width:100%;min-height:380px;padding:12px;border:1px solid #e2dccd;border-radius:8px;background:#fcfaf4;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.6}
+button{cursor:pointer;border:none;border-radius:20px;padding:9px 16px;font-weight:600}
+.btn{background:#232019;color:#f3ecdc}
+.btn-ghost{background:#fff;border:1px solid #e2dccd;color:#5b554a}
+.btn-red{background:#b0392c;color:#fff}
+.btn-gold{background:#c9a227;color:#fff}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.two{display:flex;gap:12px}
+.two>div{flex:1}
+.item{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #f0ebdf}
+.item .t{font-family:"Songti SC",serif;font-weight:700}
+.item .meta{font-size:11px;color:#9a9384}
+.badge{font-size:11px;padding:2px 8px;border-radius:10px}
+.badge.pub{background:#e7f0ea;color:#3f6f62}
+.badge.draft{background:#fbeeec;color:#b0392c}
+.ops{margin-left:auto;display:flex;gap:6px}
+.ops button{padding:5px 10px;font-size:11px;font-weight:400}
+.hint{font-size:12px;color:#9a9384;margin-top:8px}
+.mock{color:#b0392c}
+.hidden{display:none}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#232019;color:#f3ecdc;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+.login{max-width:360px;margin:60px auto}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- 登录 -->
+<div id="login" class="wrap login">
+  <div class="card">
+    <h1>诗境 · 管理后台</h1>
+    <div class="sub">输入管理员口令登录</div>
+    <label>口令（ADMIN_KEY，默认 admin123）</label>
+    <input id="key" type="password" placeholder="请输入口令" />
+    <div class="btns"><button class="btn" onclick="login()">登录</button></div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div id="app" class="wrap hidden">
+  <h1>诗境 · 管理后台</h1>
+  <div class="sub">输入诗名与诗人，大模型补全各模块内容；审核无误后发布。<span id="llmTip"></span></div>
+  <div class="row">
+    <!-- 列表 -->
+    <div class="col-list card">
+      <div style="display:flex;align-items:center;margin-bottom:8px">
+        <strong>诗词列表</strong>
+        <button class="btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="newPoem()">+ 新建</button>
+      </div>
+      <div id="list"></div>
+    </div>
+    <!-- 编辑 -->
+    <div class="col-edit card">
+      <div class="two">
+        <div><label>诗名</label><input id="title" placeholder="如：登高" /></div>
+        <div><label>诗人</label><input id="author" placeholder="如：杜甫" /></div>
+      </div>
+      <div class="btns">
+        <button class="btn-gold" onclick="generate()">✨ AI 生成内容</button>
+        <span id="editingId" class="hint" style="align-self:center"></span>
+      </div>
+      <label>内容（JSON，可人工校对/修改）</label>
+      <textarea id="json" placeholder="点「AI 生成内容」后在此预览并编辑…"></textarea>
+      <div class="btns">
+        <button class="btn" onclick="saveDraft()">保存为草稿</button>
+        <button class="btn-ghost" onclick="update()">更新当前</button>
+        <button class="btn-ghost" onclick="genIllust()">🖼 重新生成插画</button>
+        <button class="btn-red" onclick="publish()">✅ 审批发布</button>
+      </div>
+      <div id="illustBox"></div>
+      <div class="hint">说明：AI 生成内容时会一并生成人物水墨插画（需配置 IMG_API_KEY）；保存/更新均为草稿态，审批发布后才对小程序可见。</div>
+    </div>
+  </div>
+</div>
+<script>
+const T = id => document.getElementById(id);
+function toast(m){ const t=T('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+function adminId(){ return localStorage.getItem('adminId') || ''; }
+function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+async function api(method, path, body){
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type':'application/json', 'X-User-Id': adminId() },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await res.json().catch(()=>({}));
+  if(!res.ok || j.code !== 0){ throw new Error(j.msg || ('HTTP '+res.status)); }
+  return j;
+}
+
+async function login(){
+  const key = T('key').value.trim();
+  try{ const j = await api('POST','/api/admin/login',{key}); localStorage.setItem('adminId', j.data.id); enter(); }
+  catch(e){ toast(e.message); }
+}
+function enter(){ T('login').classList.add('hidden'); T('app').classList.remove('hidden'); loadList(); }
+
+let editId = 0;
+function setEdit(id){ editId = id; T('editingId').textContent = id ? ('当前编辑 ID: '+id) : ''; }
+
+async function loadList(){
+  try{ const j = await api('GET','/api/admin/poems'); renderList(j.data||[]); }
+  catch(e){ toast(e.message); }
+}
+function renderList(list){
+  T('list').innerHTML = list.map(p => `
+    <div class="item">
+      <div>
+        <div class="t">${esc(p.title)} <span class="badge ${p.status==='published'?'pub':'draft'}">${p.status==='published'?'已发布':'草稿'}</span></div>
+        <div class="meta">${esc(p.dynasty||'')} · ${esc(p.author||'')} · 评论 ${p.commentCount||0}</div>
+      </div>
+      <div class="ops">
+        <button class="btn-ghost" onclick="editPoem(${p.id})">编辑</button>
+        ${p.status==='published'
+          ? `<button class="btn-ghost" onclick="unpublish(${p.id})">下架</button>`
+          : `<button class="btn-red" onclick="publish(${p.id})">发布</button>`}
+        <button class="btn-ghost" onclick="del(${p.id})">删除</button>
+      </div>
+    </div>`).join('') || '<div class="hint">暂无诗词</div>';
+}
+function newPoem(){ setEdit(0); T('title').value=''; T('author').value=''; T('json').value=''; }
+
+async function generate(){
+  const title = T('title').value.trim(), author = T('author').value.trim();
+  if(!title || !author){ toast('请填写诗名与诗人'); return; }
+  toast('生成中…请稍候');
+  try{
+    const j = await api('POST','/api/admin/poems/generate',{title, author});
+    T('json').value = JSON.stringify(j.data, null, 2);
+    renderIllust(j.data);
+    toast(j.mock ? '已用本地 mock 生成（未配置大模型 Key）' : '已生成，请人工校对');
+  }catch(e){ toast(e.message); }
+}
+
+function fullURL(u){ return u && (u.indexOf('http')===0 ? u : location.origin + u); }
+function renderIllust(poem){
+  const u = poem && poem.illustrationUrl;
+  T('illustBox').innerHTML = u
+    ? `<img src="${fullURL(u)}" style="max-width:100%;border-radius:12px;margin-top:12px;border:1px solid #e2dccd"/>`
+    : '';
+}
+async function genIllust(){
+  if(!editId){ toast('请先保存草稿再生成插画'); return; }
+  toast('插画生成中…请稍候');
+  try{
+    const j = await api('POST','/api/poems/'+editId+'/illustration');
+    let poem; try{ poem = parseJSON(); }catch(e){ poem = {}; }
+    poem.illustrationUrl = j.data.illustrationUrl;
+    T('json').value = JSON.stringify(poem, null, 2);
+    renderIllust(poem);
+    toast('插画已生成');
+  }catch(e){ toast(e.message); }
+}
+
+function parseJSON(){
+  try{ return JSON.parse(T('json').value); }
+  catch(e){ toast('JSON 格式有误：'+e.message); throw e; }
+}
+
+async function saveDraft(){
+  let poem; try{ poem = parseJSON(); }catch(e){ return; }
+  try{ const j = await api('POST','/api/admin/poems',poem); setEdit(j.data.id); toast('已保存为草稿'); loadList(); }
+  catch(e){ toast(e.message); }
+}
+async function update(){
+  if(!editId){ toast('请先在列表点「编辑」，或先保存草稿'); return; }
+  let poem; try{ poem = parseJSON(); }catch(e){ return; }
+  try{ await api('PUT','/api/admin/poems/'+editId,poem); toast('已更新'); loadList(); }
+  catch(e){ toast(e.message); }
+}
+async function publish(id){
+  const pid = id || editId;
+  if(!pid){ toast('请先保存草稿再发布'); return; }
+  try{ await api('POST','/api/admin/poems/'+pid+'/publish'); toast('已发布，小程序可见'); loadList(); }
+  catch(e){ toast(e.message); }
+}
+async function unpublish(id){
+  try{ await api('POST','/api/admin/poems/'+id+'/unpublish'); toast('已下架'); loadList(); }
+  catch(e){ toast(e.message); }
+}
+async function del(id){
+  if(!confirm('确认删除这首诗及其评论？不可恢复')) return;
+  try{ await api('DELETE','/api/admin/poems/'+id); if(editId===id) newPoem(); toast('已删除'); loadList(); }
+  catch(e){ toast(e.message); }
+}
+async function editPoem(id){
+  try{
+    const j = await api('GET','/api/poems/'+id);
+    const p = j.data;
+    T('title').value = p.title||''; T('author').value = p.author||'';
+    T('json').value = JSON.stringify(p, null, 2);
+    renderIllust(p);
+    setEdit(id);
+    toast('已载入，可修改后点「更新当前」');
+  }catch(e){ toast(e.message); }
+}
+
+if(adminId()) enter();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/library/index",
+    "pages/poem/detail",
+    "pages/profile/index",
+    "pages/mylist/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "诗境",
+    "navigationBarBackgroundColor": "#f8f5ee",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#ded9cd",
+    "enablePullDownRefresh": false
+  },
+  "tabBar": {
+    "color": "#a49d8e",
+    "selectedColor": "#b0392c",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "发现" },
+      { "pagePath": "pages/library/index", "text": "诗库" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "plugins": {
+    "WechatSI": {
+      "version": "0.3.5",
+      "provider": "wx069ba97219f66d99"
+    }
+  }
+}

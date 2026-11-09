@@ -1,0 +1,41 @@
+<view class="list-page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <view wx:elif="{{empty}}" class="empty">
+    <text class="empty-ic">{{type==='favorites' ? '⭐' : (type==='likes' ? '♥' : '💬')}}</text>
+    <text class="empty-tx">这里还空空如也</text>
+    <text class="empty-sub">{{type==='favorites' ? '去诗库收藏喜欢的诗吧' : '去诗词下方留下你的感受吧'}}</text>
+  </view>
+
+  <!-- 收藏：诗卡 -->
+  <block wx:if="{{type==='favorites' && !loading && !empty}}">
+    <view wx:for="{{poems}}" wx:key="id" class="pcard" bindtap="goDetail" data-id="{{item.id}}">
+      <image wx:if="{{item.illust}}" class="pc-img" src="{{item.illust}}" mode="aspectFill" lazy-load></image>
+      <view wx:else class="pc-img pc-img-ph serif">诗</view>
+      <view class="pc-main">
+        <view class="pc-title serif">{{item.title}}</view>
+        <view class="pc-meta">{{item.dynasty}} · {{item.author}}</view>
+        <view class="pc-verse">{{item.firstVerse}}</view>
+        <view class="pc-pop">♡ {{item.likeCount || 0}} · ★ {{item.favoriteCount || 0}} · 💬 {{item.commentCount || 0}}</view>
+      </view>
+      <text class="pc-arrow">›</text>
+    </view>
+  </block>
+
+  <!-- 评论 / 被赞：评论卡 -->
+  <block wx:if="{{type!=='favorites' && !loading && !empty}}">
+    <view wx:for="{{comments}}" wx:key="id" class="ccard" bindtap="goDetail" data-id="{{item.poemId}}">
+      <view class="cc-top">
+        <text class="cc-poem">《{{item.poemTitle}}》· {{item.poemAuthor}}</text>
+        <text class="cc-date">{{item.dateText}}</text>
+      </view>
+      <view class="cc-content {{item.kind==='shihua' ? 'serif' : ''}}">{{item.content}}</view>
+      <view class="cc-foot">
+        <text class="cc-like">♥ {{item.likeCount}}</text>
+        <text wx:if="{{item.isPinned}}" class="cc-badge gold">★ 置顶</text>
+        <text wx:elif="{{item.isFeatured}}" class="cc-badge gold">精品</text>
+        <text class="cc-go">查看原诗 ›</text>
+      </view>
+    </view>
+  </block>
+</view>

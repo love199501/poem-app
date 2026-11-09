@@ -1,0 +1,768 @@
+.page {
+  height: 100vh;
+  background: #f8f5ee;
+  position: relative;
+}
+.loading {
+  text-align: center;
+  color: #9a9384;
+  padding-top: 200rpx;
+}
+
+/* 步骤条 */
+.stepbar {
+  display: flex;
+  height: 108rpx;
+  padding: 0 16rpx;
+  background: rgba(248, 245, 238, 0.96);
+  border-bottom: 1rpx solid #e8e2d4;
+}
+.step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #a39c8d;
+  border-radius: 16rpx;
+  margin: 10rpx 4rpx;
+}
+.step.on {
+  color: #b0392c;
+  background: #fbf1d8;
+  font-weight: 700;
+}
+.s-k {
+  font-size: 30rpx;
+}
+.s-l {
+  font-size: 18rpx;
+}
+
+/* 滚动区 */
+.body {
+  height: calc(100vh - 108rpx - 120rpx);
+}
+.anchor {
+  height: 1rpx;
+}
+.lead {
+  display: flex;
+  align-items: center;
+  margin: 36rpx 32rpx 4rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+.lead-k {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 14rpx;
+  background: #b0392c;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  margin-right: 16rpx;
+}
+
+/* 读 */
+.poem-head {
+  padding: 8rpx 36rpx 0;
+}
+.poem-title {
+  font-size: 54rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+}
+.poem-author {
+  font-size: 22rpx;
+  color: #9a9384;
+  margin: 14rpx 0 16rpx;
+}
+/* 受欢迎度：点赞 / 收藏 / 评论 */
+.pop {
+  display: flex;
+  gap: 40rpx;
+  margin-top: 20rpx;
+}
+.pop-i {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  color: #8c8577;
+}
+.pop-ic {
+  font-size: 26rpx;
+  color: #b0392c;
+}
+.pop-i.like .pop-ic {
+  color: #c9c2b3;
+}
+.pop-i.like.on .pop-ic {
+  color: #b0392c;
+}
+.pop-n {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #4a453b;
+}
+.pop-l {
+  font-size: 20rpx;
+  color: #a8a194;
+}
+.poem-body {
+  padding: 20rpx 36rpx 0;
+}
+.poem-line {
+  font-size: 38rpx;
+  line-height: 2.1;
+  letter-spacing: 4rpx;
+  color: #2f2b23;
+  padding: 2rpx 12rpx;
+}
+.poem-line.active {
+  background: #fbf1d8;
+  color: #8a2c1f;
+  border-radius: 10rpx;
+}
+.poem-tip {
+  font-size: 20rpx;
+  color: #b4ada0;
+  text-align: center;
+  margin-top: 14rpx;
+}
+.poem-illust-wrap {
+  margin: 20rpx 32rpx 4rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  background: linear-gradient(180deg, #fbf8f1, #f3ecda);
+  border: 1rpx solid #ece3cf;
+  position: relative;
+}
+.poem-illust {
+  width: 100%;
+  display: block;
+}
+.poem-illust-cap {
+  position: absolute;
+  right: 18rpx;
+  bottom: 14rpx;
+  font-size: 20rpx;
+  color: #8a7f68;
+  letter-spacing: 2rpx;
+}
+.fold {
+  background: #fff;
+  border-radius: 24rpx;
+  margin: 24rpx 32rpx 0;
+  padding: 26rpx;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+.fold-head {
+  display: flex;
+  align-items: center;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+.fold-head .dot {
+  width: 6rpx;
+  height: 26rpx;
+  background: #b0392c;
+  border-radius: 4rpx;
+  margin-right: 16rpx;
+}
+.fold-head .chev {
+  margin-left: auto;
+  font-size: 20rpx;
+  color: #9a9384;
+}
+.note-line {
+  font-size: 27rpx;
+  color: #8a2c1f;
+  margin: 18rpx 0 10rpx;
+}
+.note-body {
+  font-size: 26rpx;
+  line-height: 1.9;
+  color: #5b554a;
+}
+.note-src {
+  font-size: 20rpx;
+  color: #a8a294;
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx dashed #f0ebdf;
+}
+.trans {
+  margin-top: 18rpx;
+}
+.trans-p {
+  font-size: 26rpx;
+  line-height: 1.9;
+  color: #5b554a;
+  margin-bottom: 12rpx;
+}
+
+/* 境 */
+.scene {
+  margin: 10rpx 32rpx 0;
+  border-radius: 28rpx;
+  padding: 32rpx;
+  color: #efe7d5;
+  background: linear-gradient(160deg, #312d25, #4d4434 70%, #5f4d33);
+}
+.scene-title {
+  font-size: 32rpx;
+  letter-spacing: 4rpx;
+}
+.scene-sub {
+  font-size: 20rpx;
+  color: #a99d82;
+  letter-spacing: 4rpx;
+  margin-bottom: 24rpx;
+}
+.scene-row {
+  display: flex;
+  font-size: 24rpx;
+  line-height: 1.7;
+  margin-bottom: 14rpx;
+  color: #ded4bd;
+}
+.scene-row .ic {
+  width: 40rpx;
+  flex: none;
+}
+.scene-bg {
+  margin-top: 8rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx dashed rgba(255, 255, 255, 0.16);
+}
+.scene-bg-k {
+  display: block;
+  font-size: 20rpx;
+  letter-spacing: 6rpx;
+  color: #c9b78f;
+  margin-bottom: 12rpx;
+}
+.scene-bg-tx {
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.9;
+  color: #f3ead8;
+}
+.scene-punch {
+  margin-top: 22rpx;
+  font-size: 27rpx;
+  line-height: 1.7;
+  color: #e6c98a;
+}
+.card {
+  background: #fff;
+  border-radius: 28rpx;
+  margin: 24rpx 32rpx 0;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+/* 意 */
+.intent-lead {
+  margin: 10rpx 32rpx 0;
+  padding: 36rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(150deg, #fdf8ec, #f4ecda);
+  border: 1rpx solid #ece0c6;
+}
+.il-q {
+  font-size: 32rpx;
+  line-height: 1.8;
+  color: #3b3226;
+}
+.il-s {
+  font-size: 22rpx;
+  color: #9c9282;
+  margin-top: 18rpx;
+  line-height: 1.7;
+}
+.why {
+  display: flex;
+  padding: 18rpx 0;
+  border-top: 1rpx dashed #f2ecdf;
+}
+.why:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.why-n {
+  width: 40rpx;
+  height: 40rpx;
+  flex: none;
+  border-radius: 50%;
+  background: #fbf1d8;
+  color: #a8791f;
+  font-size: 22rpx;
+  text-align: center;
+  line-height: 40rpx;
+  margin-right: 18rpx;
+}
+.why-t {
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: #544e43;
+}
+.why-t .b {
+  color: #232019;
+  font-weight: 700;
+}
+.strat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 32rpx;
+  gap: 18rpx;
+}
+.strat {
+  width: calc(50% - 9rpx);
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+.st-n {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #b0392c;
+  margin-bottom: 12rpx;
+}
+.st-d {
+  font-size: 21rpx;
+  line-height: 1.7;
+  color: #7d7669;
+}
+.aud {
+  display: flex;
+  margin-bottom: 18rpx;
+}
+.aud:last-child {
+  margin-bottom: 0;
+}
+.ar {
+  font-size: 20rpx;
+  color: #fff;
+  background: #3f6f62;
+  border-radius: 10rpx;
+  padding: 2rpx 14rpx;
+  flex: none;
+  align-self: flex-start;
+  margin-right: 16rpx;
+}
+.aud-t {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #544e43;
+}
+.void {
+  margin: 0 32rpx;
+  background: #fbf8f1;
+  border: 1rpx dashed #ddd2bc;
+  border-radius: 28rpx;
+  padding: 30rpx;
+  font-size: 25rpx;
+  line-height: 1.9;
+  color: #5b554a;
+}
+
+/* 悟 */
+.layer-t {
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  margin-bottom: 14rpx;
+}
+.layer-b {
+  font-size: 25rpx;
+  line-height: 1.9;
+  color: #544e43;
+}
+.quote {
+  margin: 0 32rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 26rpx 28rpx;
+  border-left: 6rpx solid #c9a227;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+/* 名家诗话 · 横向滑动 */
+.quote-scroll {
+  white-space: nowrap;
+  padding: 4rpx 32rpx;
+}
+.quote.hcard {
+  display: inline-block;
+  vertical-align: top;
+  white-space: normal;
+  width: 80%;
+  margin: 0 16rpx 0 0;
+  box-sizing: border-box;
+}
+.qt {
+  font-size: 26rpx;
+  line-height: 1.9;
+  color: #4a453b;
+}
+.qs {
+  font-size: 20rpx;
+  color: #9a9384;
+  margin-top: 14rpx;
+  text-align: right;
+}
+.duel {
+  display: flex;
+  gap: 18rpx;
+  padding: 0 32rpx;
+  margin-top: 24rpx;
+}
+.duel .d {
+  flex: 1;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  box-shadow: 0 4rpx 18rpx rgba(60, 50, 30, 0.06);
+}
+.duel .dh {
+  font-size: 22rpx;
+  font-weight: 700;
+  margin-bottom: 14rpx;
+  padding-bottom: 12rpx;
+  border-bottom: 1rpx dashed #e8e2d4;
+}
+.duel .d.a .dh {
+  color: #b0392c;
+}
+.duel .d.b .dh {
+  color: #3f6f62;
+}
+.duel .dp {
+  font-size: 22rpx;
+  line-height: 1.8;
+  color: #615b4f;
+}
+
+/* 议 · 讨论区 */
+.talk-bar {
+  display: flex;
+  gap: 32rpx;
+  align-items: center;
+  padding: 20rpx 32rpx 4rpx;
+  font-size: 24rpx;
+  color: #9a9384;
+}
+.talk-bar .tb.on {
+  color: #232019;
+  font-weight: 700;
+}
+.comment {
+  display: flex;
+  margin: 0 32rpx;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid #f0ebdf;
+}
+.comment.pinned {
+  margin: 12rpx 32rpx 4rpx;
+  padding: 26rpx;
+  border-bottom: none;
+  border-radius: 24rpx;
+  background: linear-gradient(180deg, #fdf8ec, #f7f0dd);
+  border: 1rpx solid #ecdfbf;
+}
+.av {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  flex: none;
+  color: #fff;
+  font-size: 26rpx;
+  text-align: center;
+  line-height: 64rpx;
+  margin-right: 18rpx;
+  font-family: "Songti SC", serif;
+}
+.cm {
+  flex: 1;
+  min-width: 0;
+}
+.cn {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6rpx 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #4a453b;
+}
+.cn-name {
+  margin-right: 4rpx;
+}
+.badge {
+  font-size: 18rpx;
+  background: #fbf1d8;
+  color: #a8791f;
+  padding: 2rpx 12rpx;
+  border-radius: 10rpx;
+  font-weight: 400;
+  margin-left: 10rpx;
+}
+.badge.gold {
+  background: #c9a227;
+  color: #fff;
+}
+/* 尺寸在此，配色来自全局 .lv-t1…t5（等级越高越醒目） */
+.lv-badge {
+  font-size: 18rpx;
+  font-weight: 400;
+  padding: 2rpx 12rpx;
+  border-radius: 10rpx;
+  margin-left: 8rpx;
+}
+.lv-badge.sm {
+  font-size: 17rpx;
+  padding: 1rpx 10rpx;
+}
+.ct {
+  font-size: 25rpx;
+  line-height: 1.75;
+  color: #5b554a;
+  margin: 12rpx 0 16rpx;
+}
+.cf {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-top: 6rpx;
+}
+.act {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 28rpx;
+  font-size: 23rpx;
+  color: #9a9384;
+  line-height: 1;
+}
+.act .act-ic {
+  font-size: 28rpx;
+  line-height: 1;
+}
+.act .act-n {
+  font-size: 23rpx;
+  line-height: 1;
+}
+.act.like.on {
+  color: #b0392c;
+  background: #fbeeec;
+  font-weight: 600;
+}
+.act.pin {
+  margin-left: auto;
+  color: #c9a227;
+  border: 1rpx solid #ecdcae;
+}
+.act.pin.on {
+  color: #fff;
+  background: #c9a227;
+  border-color: #c9a227;
+}
+.act-hover {
+  opacity: 0.55;
+}
+
+/* 楼中楼回复 */
+.replies {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
+  background: #faf7f0;
+  border-radius: 16rpx;
+}
+.reply-item {
+  display: flex;
+  gap: 14rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #f0ebdf;
+}
+.reply-item:last-of-type {
+  border-bottom: none;
+}
+.rp-av {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  flex: none;
+  color: #fff;
+  font-size: 20rpx;
+  text-align: center;
+  line-height: 44rpx;
+  font-family: "Songti SC", serif;
+}
+.rp-body {
+  flex: 1;
+  min-width: 0;
+}
+.rp-head {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+.rp-name {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #4a453b;
+}
+.rp-to {
+  font-size: 20rpx;
+  color: #9a9384;
+}
+.rp-ct {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #5b554a;
+  margin: 8rpx 0 6rpx;
+}
+.rp-cf {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+.rp-cf .act {
+  padding: 6rpx 10rpx;
+  font-size: 21rpx;
+}
+.rp-cf .act .act-ic {
+  font-size: 24rpx;
+}
+.reply-more {
+  font-size: 22rpx;
+  color: #b0392c;
+  padding: 12rpx 4rpx 2rpx;
+}
+
+
+
+
+/* 写评论 */
+.talk-input {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin: 24rpx 32rpx 0;
+  background: #f5f1e7;
+  border-radius: 44rpx;
+  padding: 18rpx 28rpx;
+}
+.ti-in {
+  flex: 1;
+  font-size: 24rpx;
+}
+.ti-send {
+  font-size: 24rpx;
+  color: #fff;
+  background: #232019;
+  border-radius: 30rpx;
+  padding: 10rpx 24rpx;
+}
+
+/* 常驻朗诵条 */
+.audio-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120rpx;
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  padding: 0 28rpx;
+  background: rgba(32, 29, 22, 0.96);
+  color: #f0e8d6;
+}
+.ab-play {
+  width: 60rpx;
+  height: 60rpx;
+  flex: none;
+  border-radius: 50%;
+  background: #f0e8d6;
+  color: #232019;
+  text-align: center;
+  line-height: 60rpx;
+  font-size: 24rpx;
+}
+.ab-mid {
+  flex: 1;
+  min-width: 0;
+}
+.ab-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 10rpx;
+}
+.ab-title {
+  font-size: 22rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ab-time {
+  font-size: 20rpx;
+  color: #b7ab92;
+  flex: none;
+}
+.ab-track {
+  height: 6rpx;
+  background: rgba(240, 232, 214, 0.25);
+  border-radius: 4rpx;
+  overflow: hidden;
+}
+.ab-i {
+  width: 34%;
+  height: 100%;
+  background: #c9a227;
+  transition: width 0.25s linear;
+}
+/* 朗诵条内的收藏入口 */
+.ab-fav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 20rpx;
+  background: rgba(240, 232, 214, 0.12);
+  border: 1rpx solid rgba(240, 232, 214, 0.28);
+  color: #e6d2a6;
+}
+.ab-fav.on {
+  background: linear-gradient(135deg, #c9873f, #b0392c);
+  border-color: transparent;
+  color: #fff4e2;
+}
+.ab-fav-ic {
+  font-size: 32rpx;
+  line-height: 1;
+}
+.ab-fav-tx {
+  font-size: 17rpx;
+  margin-top: 4rpx;
+}
+
+/* 通用标题（页面内复用） */
+.tags {
+  margin-top: 4rpx;
+}
+
+
+
+
+

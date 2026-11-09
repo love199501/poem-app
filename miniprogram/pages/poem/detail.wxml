@@ -1,0 +1,229 @@
+<view class="page" wx:if="{{poem}}">
+
+  <!-- 步骤条 -->
+  <view class="stepbar">
+    <view wx:for="{{steps}}" wx:key="key" class="step {{curStep===item.key?'on':''}}"
+          data-key="{{item.key}}" bindtap="goStep">
+      <text class="s-k serif">{{item.k}}</text>
+      <text class="s-l">{{item.label}}</text>
+    </view>
+  </view>
+
+  <scroll-view scroll-y class="body" scroll-into-view="{{intoView}}" scroll-with-animation
+               bindscroll="onScroll" throttle="{{false}}">
+
+    <!-- 读 -->
+    <view id="sec-read" class="anchor"></view>
+    <view class="lead"><text class="lead-k serif">读</text>原文 · 注释 · 译文</view>
+
+    <view class="poem-head">
+      <view class="poem-title serif">{{poem.title}}</view>
+      <view class="poem-author">{{poem.dynasty}} · {{poem.author}} · {{poem.form}} · {{poem.yearLabel}}</view>
+      <view class="tags">
+        <text wx:for="{{poem.tags}}" wx:key="*this" class="tag">{{item}}</text>
+      </view>
+      <view class="pop">
+        <view class="pop-i like {{liked?'on':''}}" catchtap="toggleLikePoem">
+          <text class="pop-ic">{{liked ? '♥' : '♡'}}</text><text class="pop-n">{{likeCount}}</text>
+          <text class="pop-l">点赞</text>
+        </view>
+        <view class="pop-i"><text class="pop-ic">★</text><text class="pop-n">{{favoriteCount}}</text><text class="pop-l">收藏</text></view>
+        <view class="pop-i"><text class="pop-ic">💬</text><text class="pop-n">{{poem.commentCount}}</text><text class="pop-l">评论</text></view>
+      </view>
+    </view>
+
+    <view class="poem-body serif">
+      <view wx:for="{{poem.lines}}" wx:key="id" data-idx="{{index}}" bindtap="pickLine"
+            class="poem-line {{activeLine===index?'active':''}}">{{item.text}}</view>
+    </view>
+    <view class="poem-tip">点击任意一句，查看对应注释</view>
+
+    <view class="fold" wx:if="{{note}}">
+      <view class="fold-head"><text class="dot"></text>注释</view>
+      <view class="note-line serif">{{note.text}}</view>
+      <rich-text class="note-body" nodes="{{note.body}}"></rich-text>
+      <view class="note-src">{{note.src}}</view>
+    </view>
+
+    <view class="fold" wx:if="{{hasTrans}}">
+      <view class="fold-head" bindtap="toggleTrans">
+        <text class="dot"></text>译文
+        <text class="chev">{{showTrans?'▲':'▼'}}</text>
+      </view>
+      <view wx:if="{{showTrans}}" class="trans">
+        <view wx:for="{{poem.translation}}" wx:key="*this" class="trans-p">{{item}}</view>
+        <view class="note-src">{{poem.transSource}}</view>
+      </view>
+    </view>
+
+    <!-- 境 -->
+    <block wx:if="{{hasScene}}">
+      <view id="sec-scene" class="anchor"></view>
+      <view class="lead"><text class="lead-k serif">境</text>创作现场 · 他经历了什么</view>
+
+      <view class="scene" wx:if="{{poem.sceneRows.length || poem.scenePunch || poem.sceneBackground || poem.sceneTitle}}">
+        <view class="scene-title serif">{{poem.sceneTitle}}</view>
+        <view class="scene-sub">{{poem.sceneSub}}</view>
+        <view wx:for="{{poem.sceneRows}}" wx:key="text" class="scene-row">
+          <text class="ic">{{item.icon}}</text><text>{{item.text}}</text>
+        </view>
+        <view wx:if="{{poem.sceneBackground}}" class="scene-bg">
+          <text class="scene-bg-k">当时</text>
+          <text class="scene-bg-tx">{{poem.sceneBackground}}</text>
+        </view>
+        <view wx:if="{{poem.scenePunch}}" class="scene-punch serif">{{poem.scenePunch}}</view>
+      </view>
+    </block>
+
+    <!-- 意 -->
+    <block wx:if="{{hasIntent}}">
+      <view id="sec-intent" class="anchor"></view>
+      <view class="lead"><text class="lead-k serif">意</text>创作意图 · 他想说什么</view>
+
+      <view class="intent-lead" wx:if="{{poem.intentLead}}">
+        <view class="il-q serif">{{poem.intentLead}}</view>
+        <view class="il-s">{{poem.intentSub}}</view>
+      </view>
+
+      <block wx:if="{{poem.audiences.length}}">
+        <view class="sec-title">他写给了谁</view>
+        <view class="card">
+          <view wx:for="{{poem.audiences}}" wx:key="role" class="aud">
+            <text class="ar">{{item.role}}</text><text class="aud-t">{{item.text}}</text>
+          </view>
+        </view>
+      </block>
+
+      <block wx:if="{{poem.void}}">
+        <view class="sec-title">他没写出来的</view>
+        <view class="void serif">{{poem.void}}</view>
+      </block>
+    </block>
+
+    <!-- 悟 -->
+    <block wx:if="{{hasWu}}">
+      <view id="sec-wu" class="anchor"></view>
+      <view class="lead"><text class="lead-k serif">悟</text>三层解析 · 越读越深</view>
+
+      <view wx:for="{{poem.layers}}" wx:key="key" class="card layer">
+        <view class="layer-t red">{{item.title}}</view>
+        <view class="layer-b">{{item.body}}</view>
+      </view>
+
+      <block wx:if="{{poem.quotes.length}}">
+        <view class="sec-title">名家诗话</view>
+        <scroll-view scroll-x class="quote-scroll" enhanced="{{true}}" show-scrollbar="{{false}}">
+          <view wx:for="{{poem.quotes}}" wx:key="source" class="quote hcard">
+            <view class="qt serif">{{item.text}}</view>
+            <view class="qs">—— {{item.source}}</view>
+          </view>
+        </scroll-view>
+      </block>
+
+      <block wx:if="{{poem.duels.length}}">
+        <view class="sec-title">有争议？并列呈现</view>
+        <view class="duel">
+          <view wx:for="{{poem.duels}}" wx:key="title" class="d {{item.side}}">
+            <view class="dh">{{item.title}}</view>
+            <view class="dp">{{item.body}}</view>
+          </view>
+        </view>
+      </block>
+    </block>
+
+    <!-- 议 · 这首诗的讨论区 -->
+    <view id="sec-talk" class="anchor"></view>
+    <view class="lead"><text class="lead-k serif">议</text>这首诗的讨论区 · {{poem.commentCount}} 条</view>
+
+    <view class="talk-bar">
+      <text class="tb {{sort==='hot'?'on':''}}" data-v="hot" bindtap="switchSort">热门</text>
+      <text class="tb {{sort==='new'?'on':''}}" data-v="new" bindtap="switchSort">最新</text>
+      <text class="tb {{onlyShihua?'on':''}}" bindtap="switchKind">仅诗话</text>
+    </view>
+
+    <view wx:for="{{comments}}" wx:key="id" class="comment {{item.isPinned?'pinned':''}}">
+      <view class="av" style="background:{{item.avatarColor}}">{{item.avatarChar}}</view>
+      <view class="cm">
+        <view class="cn">
+          <text class="cn-name">{{item.authorName}}</text>
+          <text wx:if="{{item.authorMember}}" class="crown-badge">👑 会员</text>
+          <text wx:if="{{item.authorTitle}}" class="lv-badge {{item.lvTier}}">Lv.{{item.authorLevel}} {{item.authorTitle}}</text>
+          <text wx:if="{{item.isPinned}}" class="badge gold">★ 精品置顶</text>
+          <text wx:elif="{{item.isFeatured}}" class="badge gold">精品</text>
+          <text wx:elif="{{item.authorBadge}}" class="badge">{{item.authorBadge}}</text>
+        </view>
+        <view class="ct {{item.kind==='shihua'?'serif':''}}">{{item.content}}</view>
+        <view class="cf">
+          <view class="act like {{item.liked?'on':''}}" data-id="{{item.id}}" catchtap="like" hover-class="act-hover">
+            <text class="act-ic">{{item.liked?'♥':'♡'}}</text>
+            <text class="act-n">{{item.likeText}}</text>
+          </view>
+          <view class="act" data-pid="{{item.id}}" data-name="{{item.authorName}}" catchtap="focusComment" hover-class="act-hover">
+            <text class="act-ic">💬</text>
+            <text class="act-n">{{item.replyCount}}</text>
+          </view>
+          <view class="act pin {{item.isPinned?'on':''}}" data-id="{{item.id}}" catchtap="pin" hover-class="act-hover">
+            <text>{{item.isPinned?'已置顶':'置顶'}}</text>
+          </view>
+        </view>
+
+        <!-- 楼中楼回复：默认折叠，点「展开」才显示 -->
+        <view wx:if="{{item.replies.length}}" class="replies">
+          <block wx:for="{{item.replies}}" wx:for-item="rp" wx:for-index="ri" wx:key="id">
+            <view wx:if="{{item.expanded}}" class="reply-item">
+              <view class="rp-av" style="background:{{rp.avatarColor}}">{{rp.avatarChar}}</view>
+              <view class="rp-body">
+                <view class="rp-head">
+                  <text class="rp-name">{{rp.authorName}}</text>
+                  <text wx:if="{{rp.authorMember}}" class="crown-badge sm">👑 会员</text>
+                  <text wx:if="{{rp.authorTitle}}" class="lv-badge sm {{rp.lvTier}}">Lv.{{rp.authorLevel}} {{rp.authorTitle}}</text>
+                  <text wx:if="{{rp.replyToName}}" class="rp-to">回复 @{{rp.replyToName}}</text>
+                </view>
+                <view class="rp-ct">{{rp.content}}</view>
+                <view class="rp-cf">
+                  <view class="act like {{rp.liked?'on':''}}" data-id="{{rp.id}}" catchtap="like" hover-class="act-hover">
+                    <text class="act-ic">{{rp.liked?'♥':'♡'}}</text>
+                    <text class="act-n">{{rp.likeText}}</text>
+                  </view>
+                  <view class="act" data-pid="{{item.id}}" data-name="{{rp.authorName}}" catchtap="focusComment" hover-class="act-hover">
+                    <text>回复</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </block>
+          <view class="reply-more" data-id="{{item.id}}" catchtap="toggleExpand">
+            {{item.expanded ? '收起回复 ▲' : '展开 ' + item.replies.length + ' 条回复 ▼'}}
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view id="sec-write" class="talk-input">
+      <input class="ti-in" placeholder="写下你对这首诗的一句感受…" value="{{input}}"
+             focus="{{inputFocus}}" bindinput="onInput" bindblur="onBlur" bindconfirm="submit"
+             confirm-type="send" />
+      <text class="ti-send" catchtap="submit">发送</text>
+    </view>
+
+    <view style="height:40rpx"></view>
+  </scroll-view>
+
+  <!-- 常驻朗诵条（含收藏入口，固定占位不遮挡滚动内容） -->
+  <view class="audio-bar">
+    <text class="ab-play {{audio.playing?'on':''}}" catchtap="toggleAudio">{{audio.loading ? '…' : (audio.playing ? '⏸' : '▶')}}</text>
+    <view class="ab-mid">
+      <view class="ab-row">
+        <text class="ab-title">朗诵 · {{poem.title}}{{poem.audioUrl ? ' · 名家' : ' · 智能朗读'}}</text>
+        <text class="ab-time">{{audio.cur}} / {{audio.dur}}</text>
+      </view>
+      <view class="ab-track"><view class="ab-i" style="width:{{audio.pct}}%"></view></view>
+    </view>
+    <view class="ab-fav {{favored?'on':''}}" catchtap="toggleFav">
+      <text class="ab-fav-ic">{{favored ? '★' : '☆'}}</text>
+      <text class="ab-fav-tx">{{favored ? '已藏' : '收藏'}}</text>
+    </view>
+  </view>
+</view>
+
+<view wx:else class="loading">加载中…</view>
