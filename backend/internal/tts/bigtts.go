@@ -6,7 +6,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -145,13 +148,49 @@ type VolcanoBigClient struct {
 }
 
 func NewVolcanoBig(key, resourceID, speaker string, speechRate int, emotion string) *VolcanoBigClient {
-	if resourceID == "" {
-		resourceID = "seed-tts-2.0"
-	}
 	if speaker == "" {
 		speaker = "zh_female_gaolengyujie_uranus_bigtts"
 	}
+	matched := resourceForSpeaker(speaker)
+	if resourceID == "" {
+		resourceID = matched
+	} else if resourceID != matched {
+		// 音色和资源 ID 必须属于同一代，否则豆包返回 resource ID is mismatched。
+		log.Printf("[tts] 音色 %s 属于 %s，已忽略配置的资源 ID %s", speaker, matched, resourceID)
+		resourceID = matched
+	}
 	return &VolcanoBigClient{Key: key, ResourceID: resourceID, Speaker: speaker, SpeechRate: speechRate, Emotion: emotion}
+}
+
+// resourceForSpeaker 按音色后缀选择豆包资源 ID。
+// mars/moon 是语音合成 1.0，uranus/saturn 是 2.0。
+func resourceForSpeaker(speaker string) string {
+	switch {
+	case strings.Contains(speaker, "_uranus_"), strings.Contains(speaker, "_saturn_"):
+		return "seed-tts-2.0"
+	case strings.Contains(speaker, "icl"):
+		if strings.Contains(speaker, "2.0") {
+			return "seed-icl-2.0"
+		}
+		return "seed-icl-1.0"
+	default:
+		return "seed-tts-1.0"
+	}
+}
+
+// emotionFor 1.0 情感音色只接受固定情感名，不支持的留空走音色默认。
+func emotionFor(resourceID, emotion string) string {
+	emotion = strings.TrimSpace(emotion)
+	if emotion == "" || resourceID != "seed-tts-1.0" {
+		return emotion
+	}
+	switch emotion {
+	case "happy", "sad", "angry", "surprised", "fear", "hate", "excited", "coldness", "neutral":
+		return emotion
+	default:
+		log.Printf("[tts] 音色资源 %s 不支持情感 %s，改为音色默认", resourceID, emotion)
+		return ""
+	}
 }
 
 func (c *VolcanoBigClient) Configured() bool { return c.Key != "" }
@@ -202,13 +241,12 @@ func (c *VolcanoBigClient) params(text string) map[string]any {
 		"sample_rate": 24000,
 		"speech_rate": c.SpeechRate, // 负值更慢，朗诵更从容
 	}
+	if emotion := emotionFor(c.ResourceID, c.Emotion); emotion != "" {
+		audio["emotion"] = emotion
+	}
 	rp := map[string]any{
 		"speaker":      c.Speaker,
 		"audio_params": audio,
-	}
-	if c.Emotion != "" {
-		rp["emotion"] = c.Emotion
-		rp["enable_emotion"] = true
 	}
 	if text != "" {
 		rp["text"] = text
@@ -224,9 +262,17 @@ func (c *VolcanoBigClient) Synthesize(text, _ string) ([]byte, error) {
 	headers.Set("X-Api-Connect-Id", connID())
 
 	dialer := websocket.Dialer{HandshakeTimeout: 15 * time.Second}
-	ws, _, err := dialer.Dial(bigURL, headers)
+	ws, resp, err := dialer.Dial(bigURL, headers)
 	if err != nil {
-		return nil, fmt.Errorf("连接豆包语音失败: %v", err)
+		detail := err.Error()
+		if resp != nil {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+			resp.Body.Close()
+			if len(b) > 0 {
+				detail = fmt.Sprintf("%s (HTTP %s %s)", err, resp.Status, strings.TrimSpace(string(b)))
+			}
+		}
+		return nil, fmt.Errorf("连接豆包语音失败: %s", detail)
 	}
 	defer ws.Close()
 

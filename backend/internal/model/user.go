@@ -5,17 +5,21 @@ import "time"
 // User 极简用户模型。原生小程序通过 wx.login 拿 code 换取 openid，
 // 这里仅保存 openid 与展示信息，便于点赞/评论归属。
 type User struct {
-	ID            uint       `gorm:"primaryKey" json:"id"`
-	OpenID        string     `gorm:"size:64;uniqueIndex" json:"-"`
-	Nickname      string     `gorm:"size:64" json:"nickname"`
-	AvatarChar    string     `gorm:"size:8" json:"avatarChar"`
-	AvatarColor   string     `gorm:"size:96" json:"avatarColor"`
-	IsAdmin       bool       `gorm:"index" json:"isAdmin"`
-	Exp           int        `gorm:"default:0;index" json:"exp"`         // 经验值（阅读/点赞/评论/收藏累计）
-	ReadSeconds   int        `gorm:"default:0" json:"readSeconds"`       // 累计阅读时长（秒）
-	MemberUntil   *time.Time `json:"memberUntil"`                        // 会员到期时间（nil 或过去=非会员）
-	MemberClaimed bool       `gorm:"default:false" json:"memberClaimed"` // 是否已领取过免费会员
-	CreatedAt     time.Time  `json:"createdAt"`
+	ID                 uint       `gorm:"primaryKey" json:"id"`
+	OpenID             string     `gorm:"size:64;uniqueIndex" json:"-"`
+	SessionToken       string     `gorm:"size:64;index" json:"token"` // 登录后下发，后续请求凭它认人
+	Nickname           string     `gorm:"size:64" json:"nickname"`
+	AvatarChar         string     `gorm:"size:8" json:"avatarChar"`
+	AvatarColor        string     `gorm:"size:96" json:"avatarColor"`
+	AvatarURL          string     `gorm:"size:512" json:"avatarUrl"`  // 微信头像（上传后本地地址或外链）
+	Phone              string     `gorm:"size:20;index" json:"phone"` // 微信绑定的手机号
+	IsAdmin            bool       `gorm:"index" json:"isAdmin"`
+	Exp                int        `gorm:"default:0;index" json:"exp"`         // 经验值（阅读/点赞/评论/收藏累计）
+	ReadSeconds        int        `gorm:"default:0" json:"readSeconds"`       // 累计阅读时长（秒）
+	MemberUntil        *time.Time `json:"memberUntil"`                        // 会员到期时间（nil 或过去=非会员）
+	MemberClaimed      bool       `gorm:"default:false" json:"memberClaimed"` // 是否已领取过首次免费会员
+	CheckinRewardMonth string     `gorm:"size:7" json:"checkinRewardMonth"`   // 打卡会员已领取的月份 YYYY-MM
+	CreatedAt          time.Time  `json:"createdAt"`
 
 	// —— 以下为非数据库字段，返回前计算填充 ——
 	Level     int    `gorm:"-" json:"level"`     // 当前等级（1 起）
@@ -33,10 +37,17 @@ func (u *User) FillMember() {
 
 // 经验奖励规则（可按运营需要调整）。
 const (
-	ExpLike       = 2 // 点赞一次
-	ExpComment    = 5 // 发表评论/回复
-	ExpFavorite   = 3 // 收藏一首诗
-	ExpReadPerMin = 2 // 每阅读满 1 分钟
+	ExpLike       = 2  // 点赞一次
+	ExpComment    = 5  // 发表评论/回复
+	ExpFavorite   = 3  // 收藏一首诗
+	ExpShare      = 5  // 分享一次诗签
+	ExpCheckin    = 15 // 完成当日全部任务后的打卡奖励
+	ExpReadPerMin = 2  // 每阅读满 1 分钟
+
+	// CheckinMemberAfter 当月打卡次数超过该值，可领取一个月会员。
+	CheckinMemberAfter = 17
+	// TrialMemberDays 首次完善资料后可领取的会员天数。
+	TrialMemberDays = 7
 )
 
 // levelDef 等级定义：达到 Threshold 经验即进入该等级，Name 为身份称号。

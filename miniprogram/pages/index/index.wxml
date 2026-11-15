@@ -1,9 +1,4 @@
 <view class="home">
-  <view class="topbar">
-    <text class="brand serif">诗境</text>
-    <view class="search" bindtap="goLibrary">🔍 搜索诗 / 诗人 / 名句</view>
-  </view>
-
   <!-- 时辰问候 -->
   <view class="greet">
     <text class="greet-title serif">{{greet.title}}</text>
@@ -18,12 +13,12 @@
       bindchange="onSwiperChange"
       previous-margin="54rpx"
       next-margin="54rpx"
-      circular
-      duration="320"
+      circular="{{circular}}"
+      duration="{{swiperDuration}}"
     >
       <swiper-item wx:for="{{poems}}" wx:key="id" class="deck-item">
-        <view class="pcard {{index === idx ? 'active' : ''}}" bindtap="goDetail" data-id="{{item.id}}">
-          <image wx:if="{{item.illust}}" class="pcard-bg" src="{{item.illust}}" mode="aspectFill" lazy-load></image>
+        <view class="pcard {{index === idx ? 'active' : ''}}" catchtap="goDetail" data-id="{{item.id}}">
+          <image wx:if="{{item.illust}}" class="pcard-bg" src="{{item.illust}}" mode="aspectFill"></image>
           <view class="pcard-mask"></view>
           <view class="pcard-inner">
             <view class="pcard-top">
@@ -31,7 +26,9 @@
               <text wx:if="{{item.audioUrl}}" class="pcard-audio">🔊 可听</text>
             </view>
             <view class="pcard-verse">
-              <text class="pcard-verse-tx serif">{{item.verseText}}</text>
+              <view class="pcard-verse-tx serif">
+                <text wx:for="{{item.verseLines}}" wx:for-item="line" wx:key="index" class="pcard-verse-line">{{line}}</text>
+              </view>
             </view>
             <view class="pcard-foot">
               <view class="pcard-meta">《{{item.title}}》· {{item.author}}</view>
@@ -42,7 +39,7 @@
                 <view class="pcard-stat">
                   <view class="ps"><text class="ps-ic heart">♥</text><text class="ps-n">{{item.likeCount || 0}}</text></view>
                   <view class="ps"><text class="ps-ic star">★</text><text class="ps-n">{{item.favoriteCount || 0}}</text></view>
-                  <view class="ps"><text class="ps-ic">💬</text><text class="ps-n">{{item.commentCount || 0}}</text></view>
+                  <view wx:if="{{commentEnabled}}" class="ps"><text class="ps-ic">💬</text><text class="ps-n">{{item.commentCount || 0}}</text></view>
                 </view>
                 <text class="pcard-cta">沉浸式阅读 →</text>
               </view>
@@ -52,25 +49,19 @@
       </swiper-item>
     </swiper>
 
-    <!-- 页码指示 + 换一换 -->
     <view class="deck-bar">
-      <view class="dots">
-        <view
-          wx:for="{{poems}}"
-          wx:key="id"
-          class="dot {{index === idx ? 'on' : ''}}"
-        ></view>
-      </view>
-      <view class="deck-info">
-        <text class="deck-count">{{idx + 1}} / {{total}}</text>
-        <text class="deck-swap" catchtap="shuffle">↻ 换一换</text>
-      </view>
+      <view class="deck-swap" catchtap="shuffle">↻ 换一换</view>
     </view>
   </view>
 
   <!-- 心情速选（取自库里实际心情标签，横向滚动） -->
+  <!-- 提前把即将出现的背景图拉进缓存，换卡时不再等网络 -->
+  <view class="preloader">
+    <image wx:for="{{preloadSrcs}}" wx:key="*this" src="{{item}}" />
+  </view>
+
   <view class="sec-title">此刻心情 <text class="more" bindtap="goLibrary">去诗库 ›</text></view>
-  <scroll-view wx:if="{{moods.length}}" scroll-x class="moods" enhanced="{{true}}" show-scrollbar="{{false}}">
+  <scroll-view wx:if="{{moods.length}}" scroll-x class="moods" show-scrollbar="{{false}}">
     <view
       wx:for="{{moods}}"
       wx:key="key"

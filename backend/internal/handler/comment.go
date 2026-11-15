@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"shijing/internal/model"
+	"shijing/internal/wechat"
 )
 
 // ListComments 讨论区列表：只返回顶层评论（置顶优先），每条挂载其楼中楼回复。
@@ -126,6 +127,10 @@ func (h *Handler) fillLiked(c *gin.Context, tops, replies []model.Comment) {
 
 // CreateComment 发表评论或回复。parentId>0 表示楼中楼回复。
 func (h *Handler) CreateComment(c *gin.Context) {
+	if !h.Cfg.CommentEnabled {
+		fail(c, http.StatusForbidden, "评论暂未开放")
+		return
+	}
 	poemID := paramUint(c, "id")
 	uid := currentUserID(c)
 	if uid == 0 {
@@ -151,6 +156,9 @@ func (h *Handler) CreateComment(c *gin.Context) {
 
 	var user model.User
 	h.DB.First(&user, uid)
+	if !h.ensureTextSafe(c, &user, body.Content, wechat.SceneComment) {
+		return
+	}
 
 	cm := model.Comment{
 		PoemID: poemID, UserID: uid,
@@ -225,10 +233,6 @@ func (h *Handler) ToggleLike(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if liked {
-		h.grantDaily(uid, "like", 1) // 点赞给点赞者加经验（每日上限内），取消不扣
-	}
-
 	h.DB.First(&cm, commentID)
 	// 高赞自动精品。
 	if cm.LikeCount >= model.FeatureLikeThreshold && !cm.IsFeatured {
@@ -239,8 +243,49 @@ func (h *Handler) ToggleLike(c *gin.Context) {
 	ok(c, gin.H{"liked": liked, "likeCount": cm.LikeCount, "isFeatured": cm.IsFeatured})
 }
 
-// PinComment 精选置顶 / 取消置顶（编辑或作者操作，演示未做鉴权）。
-// 置顶即标记精品，并记录置顶时间用于排序。
+// AdminListComments 后台查看评论，置顶在前，其余按时间倒序。
+func (h *Handler) AdminListComments(c *gin.Context) {
+	var comments []model.Comment
+	if err := h.DB.Order("is_pinned desc, id desc").Limit(200).Find(&comments).Error; err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	idset := map[uint]struct{}{}
+	for _, cm := range comments {
+		if cm.PoemID > 0 {
+			idset[cm.PoemID] = struct{}{}
+		}
+	}
+	ids := make([]uint, 0, len(idset))
+	for id := range idset {
+		ids = append(ids, id)
+	}
+	titleOf := map[uint]string{}
+	if len(ids) > 0 {
+		var poems []model.Poem
+		h.DB.Model(&model.Poem{}).Select("id,title").Where("id IN ?", ids).Find(&poems)
+		for _, p := range poems {
+			titleOf[p.ID] = p.Title
+		}
+	}
+	list := make([]gin.H, 0, len(comments))
+	for _, cm := range comments {
+		list = append(list, gin.H{
+			"id":         cm.ID,
+			"poemId":     cm.PoemID,
+			"poemTitle":  titleOf[cm.PoemID],
+			"authorName": cm.AuthorName,
+			"content":    cm.Content,
+			"kind":       cm.Kind,
+			"likeCount":  cm.LikeCount,
+			"isPinned":   cm.IsPinned,
+			"createdAt":  cm.CreatedAt,
+		})
+	}
+	ok(c, list)
+}
+
+// PinComment 后台置顶或取消置顶。置顶时记为精品，并排到这首诗讨论区最前。
 func (h *Handler) PinComment(c *gin.Context) {
 	commentID := paramUint(c, "id")
 	var cm model.Comment

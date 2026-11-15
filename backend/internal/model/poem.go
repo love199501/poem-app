@@ -118,6 +118,7 @@ type Poem struct {
 	CreatedAt     time.Time `json:"createdAt"`
 
 	// Favored / Liked 非数据库字段：当前请求用户是否已收藏 / 已点赞，详情接口按 user 填充。
-	Favored bool `gorm:"-" json:"favored"`
-	Liked   bool `gorm:"-" json:"liked"`
+	Favored bool       `gorm:"-" json:"favored"`
+	Liked   bool       `gorm:"-" json:"liked"`
+	ReadAt  *time.Time `gorm:"-" json:"readAt,omitempty"` // 当前用户最近一次阅读时间，仅阅读历史接口填充
 }

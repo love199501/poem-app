@@ -1,0 +1,104 @@
+.page {
+  min-height: 100vh;
+  background: #f8f5ee;
+  padding: 28rpx 32rpx 48rpx;
+}
+.head {
+  margin-bottom: 28rpx;
+}
+.title {
+  font-size: 48rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+}
+.sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #9a9384;
+}
+.empty {
+  text-align: center;
+  color: #9a9384;
+  font-size: 24rpx;
+  padding: 80rpx 0;
+}
+.era {
+  display: flex;
+  align-items: stretch;
+}
+.rail {
+  width: 36rpx;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  border: 3rpx solid #b0392c;
+  background: #f8f5ee;
+  margin-top: 14rpx;
+  flex: none;
+}
+.dot.on {
+  background: #b0392c;
+}
+.line {
+  width: 2rpx;
+  flex: 1;
+  background: #e4d8c4;
+  margin: 8rpx 0;
+}
+.era:last-child .line {
+  background: transparent;
+}
+.body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 12rpx;
+}
+.era-hd {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+  padding: 8rpx 0 16rpx;
+}
+.era-name {
+  font-size: 34rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+}
+.era-meta {
+  flex: 1;
+  font-size: 20rpx;
+  color: #a39c8d;
+}
+.era-chev {
+  font-size: 22rpx;
+  color: #b0392c;
+}
+.poets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  padding-bottom: 20rpx;
+}
+.poet {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+  padding: 16rpx 22rpx;
+  background: #fff;
+  border-radius: 18rpx;
+  box-shadow: 0 4rpx 14rpx rgba(60, 50, 30, 0.05);
+}
+.poet-name {
+  font-size: 28rpx;
+  font-weight: 700;
+}
+.poet-meta {
+  font-size: 20rpx;
+  color: #a39c8d;
+}

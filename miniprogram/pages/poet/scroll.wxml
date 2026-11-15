@@ -1,0 +1,68 @@
+<view class="page">
+  <view class="head" wx:if="{{author}}">
+    <view class="name serif">{{author}}</view>
+    <view class="meta">{{dynasty ? dynasty + ' · ' : ''}}{{count}} 首 · 由少至长</view>
+  </view>
+
+  <view wx:if="{{intro || introLoading}}" class="intro">
+    <view class="intro-k">诗人介绍</view>
+    <view class="intro-tx">{{intro || '正在整理…'}}</view>
+  </view>
+
+  <view wx:if="{{author}}" class="entry-ask {{askOpen?'on':''}}" bindtap="toggleAsk">与{{author}}对话</view>
+
+  <view wx:if="{{askOpen}}" class="ask">
+    <view class="ask-note">内容由 AI 生成，仅供参考</view>
+    <view wx:if="{{isMember}}" class="ask-lock quiet">会员对话不限次数</view>
+    <view wx:elif="{{askRemain > 0}}" class="ask-lock quiet">还可与这位诗人对话 {{askRemain}} 次 · 看广告可再增加</view>
+    <view wx:else class="ask-lock">看完广告即可与这位诗人对话 {{askPerAd}} 次</view>
+    <view class="ask-row author">
+      <view class="ask-ava">{{authorChar}}</view>
+      <view class="ask-bubble">我是{{author}}。你要是想听我这一生，不必从某一首诗问起。出身、流离、写诗的那些年，你想知道哪一段，直接问我。</view>
+    </view>
+    <view wx:for="{{asks}}" wx:key="index" class="ask-row {{item.role==='user'?'mine':'author'}}">
+      <view wx:if="{{item.role!=='user'}}" class="ask-ava">{{authorChar}}</view>
+      <view class="ask-bubble">
+        <text class="ask-tx">{{item.content}}</text>
+        <text wx:if="{{item.source}}" class="ask-src">{{item.source}}</text>
+      </view>
+      <view wx:if="{{item.role==='user'}}" class="ask-ava mine">我</view>
+    </view>
+    <view wx:if="{{askBusy}}" class="ask-row author">
+      <view class="ask-ava">{{authorChar}}</view>
+      <view class="ask-bubble">我想一想…</view>
+    </view>
+    <view class="ask-chips">
+      <view wx:for="{{askPrompts}}" wx:key="*this" class="ask-chip" data-q="{{item}}" bindtap="sendAsk">{{item}}</view>
+    </view>
+    <view class="ask-bar">
+      <input class="ask-in" placeholder="发消息给{{author}}…" value="{{askInput}}" bindinput="onAskInput" confirm-type="send" bindconfirm="sendAsk" disabled="{{askBusy}}"/>
+      <view class="ask-send {{askBusy?'off':''}}" catchtap="sendAsk">↑</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="empty">展开卷轴…</view>
+  <view wx:elif="{{!stages.length}}" class="empty">还没有这位诗人的诗文</view>
+
+  <view wx:for="{{stages}}" wx:key="label" class="stage">
+    <view class="rail">
+      <view class="dot"></view>
+      <view class="line"></view>
+    </view>
+    <view class="body">
+      <view class="age serif">{{item.label}}</view>
+      <view
+        wx:for="{{item.poems}}"
+        wx:for-item="p"
+        wx:key="id"
+        class="poem"
+        data-id="{{p.id}}"
+        bindtap="goDetail"
+      >
+        <view class="pt serif">《{{p.title}}》</view>
+        <view class="pm">{{p.yearLabel}}{{p.form ? ' · ' + p.form : ''}}</view>
+        <view wx:if="{{p.firstVerse}}" class="pv">{{p.firstVerse}}</view>
+      </view>
+    </view>
+  </view>
+</view>

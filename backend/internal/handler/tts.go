@@ -20,33 +20,46 @@ import (
 // SynthesizePoemAudio 为一首诗合成「有感情的朗诵」音频并缓存。
 // 已有 audioUrl 直接返回；带 ?force=1 则忽略缓存、重新生成并覆盖（换音色/语速后用）。
 func (h *Handler) SynthesizePoemAudio(c *gin.Context) {
+	if currentUserID(c) == 0 {
+		fail(c, http.StatusUnauthorized, "请先登录")
+		return
+	}
 	id := paramUint(c, "id")
 	force := c.Query("force") == "1" || c.Query("force") == "true"
+	if force {
+		var me model.User
+		if err := h.DB.Select("is_admin").First(&me, currentUserID(c)).Error; err != nil || !me.IsAdmin {
+			fail(c, http.StatusForbidden, "不能重新合成")
+			return
+		}
+	}
 	var poem model.Poem
 	if err := h.DB.Preload("Lines", func(db *gorm.DB) *gorm.DB { return db.Order("seq asc") }).First(&poem, id).Error; err != nil {
 		fail(c, http.StatusNotFound, "诗词不存在")
 		return
 	}
-	if poem.AudioURL != "" && !force {
-		ok(c, gin.H{"audioUrl": poem.AudioURL})
-		return
-	}
-
-	client := h.pickTTS()
-	if client == nil {
-		log.Printf("[tts] 没有可用供应商: TTS_PROVIDER=%q volcano=%v azure=%v openai=%v",
-			h.Cfg.TTSProvider, h.Cfg.VolcAppID != "" && h.Cfg.VolcToken != "",
-			h.Cfg.AzureKey != "", h.Cfg.TTSAPIKey != "")
-		fail(c, http.StatusServiceUnavailable,
-			"未配置情感朗诵（当前 TTS_PROVIDER="+h.Cfg.TTSProvider+"；火山需 VOLC_APPID+VOLC_ACCESS_TOKEN，Azure 需 AZURE_SPEECH_KEY，OpenAI 需 TTS_API_KEY）")
-		return
-	}
-
 	text := buildReadText(&poem)
 	if text == "" {
 		fail(c, http.StatusBadRequest, "暂无可朗诵内容")
 		return
 	}
+
+	voice := tts.ChooseRecitation(poem.Author, poem.Moods, poem.Tags, text+poem.Title)
+	// 地址还在、文件或数据库里也在、音色未变，才用缓存。否则重新合成。
+	if poem.AudioURL != "" && !force && strings.Contains(poem.AudioURL, "spk="+voice.Key) && h.audioReady(poem.AudioURL) {
+		ok(c, gin.H{"audioUrl": poem.AudioURL, "speaker": voice.Label})
+		return
+	}
+	if poem.AudioURL != "" && !h.audioReady(poem.AudioURL) {
+		log.Printf("[tts] 朗诵文件丢失，重新合成 poem=%d", poem.ID)
+	}
+	client := h.pickTTSFor(voice)
+	if client == nil {
+		log.Printf("[tts] 没有可用供应商: TTS_PROVIDER=%q", h.Cfg.TTSProvider)
+		fail(c, http.StatusServiceUnavailable, "未配置情感朗诵")
+		return
+	}
+	log.Printf("[tts] %s《%s》音色 %s（%s）语速 %d", poem.Author, poem.Title, voice.Speaker, voice.Label, voice.Rate)
 
 	audio, err := client.Synthesize(text, buildInstruction(&poem))
 	if err != nil {
@@ -65,51 +78,64 @@ func (h *Handler) SynthesizePoemAudio(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, e.Error())
 		return
 	}
+	if e := h.DB.Save(&model.ImageFile{Name: name, ContentType: "audio/mpeg", Data: audio}).Error; e != nil {
+		log.Printf("[tts] 音频写入数据库失败 poem=%d: %v", id, e)
+	}
 
 	// 带版本号，换音色/语速重新生成后能绕过小程序与缓存。
-	url := fmt.Sprintf("/audio/%s?v=%d", name, time.Now().Unix())
+	url := fmt.Sprintf("/audio/%s?v=%d&spk=%s", name, time.Now().Unix(), voice.Key)
 	h.DB.Model(&model.Poem{}).Where("id = ?", id).Update("audio_url", url)
-	ok(c, gin.H{"audioUrl": url})
+	ok(c, gin.H{"audioUrl": url, "speaker": voice.Label})
 }
 
-// pickTTS 按配置选择朗诵供应商。未配置返回 nil。
-func (h *Handler) pickTTS() tts.Synthesizer {
-	az := tts.NewAzure(h.Cfg.AzureKey, h.Cfg.AzureRegion, h.Cfg.AzureVoice, h.Cfg.AzureStyle)
-	vo := tts.NewVolcano(h.Cfg.VolcAppID, h.Cfg.VolcToken, h.Cfg.VolcCluster, h.Cfg.VolcVoiceType, h.Cfg.VolcEmotion)
-	vb := tts.NewVolcanoBig(h.Cfg.VolcBigKey, h.Cfg.VolcResourceID, h.Cfg.VolcSpeaker, h.Cfg.VolcSpeechRate, h.Cfg.VolcBigEmotion)
-	oa := tts.New(h.Cfg.TTSBaseURL, h.Cfg.TTSAPIKey, h.Cfg.TTSModel, h.Cfg.TTSVoice)
-	switch h.Cfg.TTSProvider {
-	case "azure":
-		if az.Configured() {
-			return az
+// pickTTSFor 按这首诗选出的音色构造朗诵客户端。豆包只用 2.0 音色。
+func (h *Handler) pickTTSFor(voice tts.Recitation) tts.Synthesizer {
+	if h.Cfg.TTSProvider == "azure" && h.Cfg.AzureKey != "" {
+		azVoice := "zh-CN-YunxiNeural"
+		if strings.HasPrefix(voice.Key, "f-") {
+			azVoice = "zh-CN-XiaoxiaoNeural"
 		}
-	case "volcano":
-		if vo.Configured() {
-			return vo
-		}
-	case "volcano_bigtts":
-		if vb.Configured() {
-			return vb
-		}
-	case "openai":
-		if oa.Configured() {
-			return oa
-		}
-	default:
-		if vb.Configured() {
-			return vb
-		}
-		if vo.Configured() {
-			return vo
-		}
-		if az.Configured() {
-			return az
-		}
-		if oa.Configured() {
-			return oa
-		}
+		return tts.NewAzure(h.Cfg.AzureKey, h.Cfg.AzureRegion, azVoice, h.Cfg.AzureStyle)
+	}
+	if h.Cfg.TTSProvider == "openai" && h.Cfg.TTSAPIKey != "" {
+		return tts.New(h.Cfg.TTSBaseURL, h.Cfg.TTSAPIKey, h.Cfg.TTSModel, h.Cfg.TTSVoice)
+	}
+	if h.Cfg.VolcBigKey != "" && h.Cfg.TTSProvider != "volcano" && h.Cfg.TTSProvider != "azure" && h.Cfg.TTSProvider != "openai" {
+		return tts.NewVolcanoBig(h.Cfg.VolcBigKey, "", voice.Speaker, voice.Rate, "")
+	}
+	if h.Cfg.VolcAppID != "" && h.Cfg.VolcToken != "" {
+		return tts.NewVolcano(h.Cfg.VolcAppID, h.Cfg.VolcToken, h.Cfg.VolcCluster, h.Cfg.VolcVoiceType, h.Cfg.VolcEmotion)
+	}
+	if h.Cfg.VolcBigKey != "" {
+		return tts.NewVolcanoBig(h.Cfg.VolcBigKey, "", voice.Speaker, voice.Rate, "")
 	}
 	return nil
+}
+
+// audioReady 缓存地址对应的 mp3 在磁盘或数据库中是否还在。
+func (h *Handler) audioReady(audioURL string) bool {
+	name := audioFileName(audioURL)
+	if name == "" {
+		return false
+	}
+	if st, err := os.Stat(filepath.Join("./web/audio", name)); err == nil && !st.IsDir() && st.Size() > 0 {
+		return true
+	}
+	var n int64
+	h.DB.Model(&model.ImageFile{}).Where("name = ?", name).Count(&n)
+	return n > 0
+}
+
+func audioFileName(audioURL string) string {
+	path := audioURL
+	if i := strings.Index(path, "?"); i >= 0 {
+		path = path[:i]
+	}
+	name := filepath.Base(path)
+	if name == "" || name == "." || strings.Contains(name, "..") {
+		return ""
+	}
+	return name
 }
 
 // buildReadText 拼朗诵文本：逐句换行，借标点形成停顿。

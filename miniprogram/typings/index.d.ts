@@ -7,6 +7,7 @@ declare const Component: (opts: any) => void;
 declare const getApp: () => any;
 declare const getCurrentPages: () => any[];
 declare const requirePlugin: (name: string) => any;
+declare const console: any;
 
 interface IAnyObject {
   [key: string]: any;

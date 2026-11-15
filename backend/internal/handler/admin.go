@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -11,7 +15,12 @@ import (
 	"shijing/internal/model"
 )
 
-// AdminAuth 管理员鉴权中间件：要求 X-User-Id 对应的用户 is_admin。
+const (
+	batchMaxItems = 100 // 单次最多新增首数
+	batchWorkers  = 10  // 同时生成的首数
+)
+
+// AdminAuth 管理员鉴权中间件：要求登录凭证对应的用户 is_admin。
 func (h *Handler) AdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := currentUserID(c)
@@ -30,7 +39,7 @@ func (h *Handler) AdminAuth() gin.HandlerFunc {
 	}
 }
 
-// AdminLogin 网页后台登录：校验口令，返回管理员用户（其 id 作为后续 X-User-Id）。
+// AdminLogin 网页后台登录：校验口令，签发会话凭证。后续请求带 X-Auth-Token。
 func (h *Handler) AdminLogin(c *gin.Context) {
 	var body struct {
 		Key string `json:"key"`
@@ -45,16 +54,52 @@ func (h *Handler) AdminLogin(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "管理员账号未初始化")
 		return
 	}
+	if err := h.issueSession(&u); err != nil {
+		fail(c, http.StatusInternalServerError, "登录失败")
+		return
+	}
+	u.FillLevel()
+	u.FillMember()
 	ok(c, u)
 }
 
-// AdminListPoems 全部诗词（含草稿），供后台管理。
+// AdminListPoems 诗词列表（含草稿），按 id 倒序分页。
+// query: page 从 1 开始，pageSize 默认 10，最大 100。
 func (h *Handler) AdminListPoems(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 10
+	}
+	if size > 100 {
+		size = 100
+	}
+	q := strings.TrimSpace(c.Query("q"))
+	filter := func(db *gorm.DB) *gorm.DB {
+		if q == "" {
+			return db
+		}
+		like := "%" + q + "%"
+		return db.Where("title LIKE ? OR author LIKE ? OR dynasty LIKE ? OR first_verse LIKE ?", like, like, like, like)
+	}
+	var total int64
+	if err := h.DB.Model(&model.Poem{}).Scopes(filter).Count(&total).Error; err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	var poems []model.Poem
-	h.DB.Model(&model.Poem{}).
+	if err := h.DB.Model(&model.Poem{}).Scopes(filter).
 		Select("id,title,dynasty,author,form,status,comment_count,created_at").
-		Order("id desc").Find(&poems)
-	ok(c, poems)
+		Order("id desc").
+		Offset((page - 1) * size).Limit(size).
+		Find(&poems).Error; err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ok(c, gin.H{"list": poems, "total": total, "page": page, "pageSize": size})
 }
 
 // AdminGenerate 输入诗名+诗人，调用大模型生成结构化内容（不落库，供后台预览/编辑）。
@@ -89,8 +134,194 @@ func (h *Handler) AdminCreatePoem(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "内容为空或格式错误")
 		return
 	}
+	prepareNewPoem(&poem, "draft")
+	poemCreateMu.Lock()
+	defer poemCreateMu.Unlock()
+	if dup, err := h.findDuplicate(poem.Title, poem.Author, 0); err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	} else if dup != nil {
+		fail(c, http.StatusBadRequest, dupMessage(dup))
+		return
+	}
+	if err := h.DB.Create(&poem).Error; err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ok(c, poem)
+}
+
+// batchItem 批量新增的一首。Text 为「诗名 诗人」，也可直接传 title、author。
+type batchItem struct {
+	Title  string `json:"title"`
+	Author string `json:"author"`
+}
+
+type batchResult struct {
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	ID     uint   `json:"id,omitempty"`
+	Status string `json:"status,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Warn   string `json:"warn,omitempty"`
+}
+
+// AdminBatchCreate 批量新增：解析多首诗名+诗人，并发生成内容、配图并落库。
+func (h *Handler) AdminBatchCreate(c *gin.Context) {
+	var body struct {
+		Text    string      `json:"text"`
+		Items   []batchItem `json:"items"`
+		Publish bool        `json:"publish"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		fail(c, http.StatusBadRequest, "格式错误")
+		return
+	}
+	items := body.Items
+	if len(items) == 0 {
+		items = parseBatchText(body.Text)
+	}
+	if len(items) == 0 {
+		fail(c, http.StatusBadRequest, "请按「诗名 诗人」每行填写至少一首")
+		return
+	}
+	if len(items) > batchMaxItems {
+		fail(c, http.StatusBadRequest, "单次最多 100 首")
+		return
+	}
+	pending, skipped := dedupeBatch(items)
+	if len(pending) == 0 && len(skipped) == 0 {
+		fail(c, http.StatusBadRequest, "请按「诗名 诗人」每行填写至少一首")
+		return
+	}
+
+	status := "draft"
+	if body.Publish {
+		status = "published"
+	}
+	results := append([]batchResult{}, skipped...)
+	made := make([]batchResult, len(pending))
+	sem := make(chan struct{}, batchWorkers)
+	var wg sync.WaitGroup
+	for i, it := range pending {
+		wg.Add(1)
+		go func(i int, it batchItem) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			made[i] = h.generateAndSave(it.Title, it.Author, status)
+		}(i, it)
+	}
+	wg.Wait()
+	results = append(results, made...)
+
+	okN := 0
+	for _, r := range results {
+		if r.Error == "" {
+			okN++
+		}
+	}
+	ok(c, gin.H{
+		"total":   len(results),
+		"ok":      okN,
+		"fail":    len(results) - okN,
+		"results": results,
+	})
+}
+
+func (h *Handler) generateAndSave(title, author, status string) batchResult {
+	res := batchResult{Title: title, Author: author, Status: status}
+	if dup, err := h.findDuplicate(title, author, 0); err != nil {
+		res.Error = err.Error()
+		return res
+	} else if dup != nil {
+		res.Error = dupMessage(dup)
+		return res
+	}
+	client := llm.New(h.Cfg.LLMBaseURL, h.Cfg.LLMAPIKey, h.Cfg.LLMModel)
+	poem, err := client.Generate(title, author)
+	if err != nil {
+		res.Error = "生成失败：" + err.Error()
+		return res
+	}
+	if url, e := h.resolveIllustration(poem); e == nil {
+		poem.IllustURL = url
+	} else {
+		res.Warn = "插画未生成：" + e.Error()
+		log.Printf("[illust] 配图失败 %s·%s: %v", title, author, e)
+	}
+	prepareNewPoem(poem, status)
+	// 生成后的诗名可能和输入略有差别，落库前再查一次，并挡住并发重复写入。
+	poemCreateMu.Lock()
+	defer poemCreateMu.Unlock()
+	if dup, err := h.findDuplicate(poem.Title, poem.Author, 0); err != nil {
+		res.Error = err.Error()
+		return res
+	} else if dup != nil {
+		res.Error = dupMessage(dup)
+		return res
+	}
+	if dup, err := h.findDuplicate(title, author, 0); err != nil {
+		res.Error = err.Error()
+		return res
+	} else if dup != nil {
+		res.Error = dupMessage(dup)
+		return res
+	}
+	if err := h.DB.Create(poem).Error; err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	res.ID = poem.ID
+	return res
+}
+
+// poemCreateMu 保证「查重 + 写入」不被并发批量请求插进同一首。
+var poemCreateMu sync.Mutex
+
+// findDuplicate 按去掉书名号、空格后的「诗名 + 诗人」判断是否已有同一首。
+func (h *Handler) findDuplicate(title, author string, exceptID uint) (*model.Poem, error) {
+	key := poemKey(title, author)
+	if key == "\n" || strings.HasPrefix(key, "\n") || strings.HasSuffix(key, "\n") {
+		return nil, nil
+	}
+	var poems []model.Poem
+	if err := h.DB.Model(&model.Poem{}).Select("id,title,author,status").Find(&poems).Error; err != nil {
+		return nil, err
+	}
+	for i := range poems {
+		if poems[i].ID == exceptID {
+			continue
+		}
+		if poemKey(poems[i].Title, poems[i].Author) == key {
+			return &poems[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func dupMessage(p *model.Poem) string {
+	return fmt.Sprintf("与已有诗词重复：%s · %s（#%d）", p.Title, p.Author, p.ID)
+}
+
+func poemKey(title, author string) string {
+	return normPoemName(title) + "\n" + normPoemName(author)
+}
+
+func normPoemName(s string) string {
+	s = strings.TrimSpace(s)
+	return strings.NewReplacer(
+		" ", "", "\t", "", "\n", "", "\r", "", "　", "",
+		"《", "", "》", "", "〈", "", "〉", "",
+		"「", "", "」", "", "『", "", "』", "",
+		"\"", "", "'", "", "“", "", "”", "", "‘", "", "’", "",
+		"·", "", "・", "", "•", "",
+	).Replace(s)
+}
+
+func prepareNewPoem(poem *model.Poem, status string) {
 	poem.ID = 0
-	poem.Status = "draft"
+	poem.Status = status
 	poem.CommentCount = 0
 	for i := range poem.Lines {
 		poem.Lines[i].ID = 0
@@ -98,11 +329,48 @@ func (h *Handler) AdminCreatePoem(c *gin.Context) {
 	}
 	poem.FirstVerse = model.CompleteDisplayVerse(poem.FirstVerse, poem.Lines)
 	poem.Dynasty = model.NormalizeDynasty(poem.Dynasty)
-	if err := h.DB.Create(&poem).Error; err != nil {
-		fail(c, http.StatusInternalServerError, err.Error())
-		return
+}
+
+// parseBatchText 每行「诗名 诗人」，诗人取最后一个词。
+func parseBatchText(text string) []batchItem {
+	var items []batchItem
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			items = append(items, batchItem{Title: line})
+			continue
+		}
+		items = append(items, batchItem{
+			Title:  strings.Join(fields[:len(fields)-1], ""),
+			Author: fields[len(fields)-1],
+		})
 	}
-	ok(c, poem)
+	return items
+}
+
+// dedupeBatch 去掉本次提交里的空行和重复行。重复按诗名+诗人判断，忽略书名号和空格。
+func dedupeBatch(items []batchItem) (pending []batchItem, skipped []batchResult) {
+	seen := map[string]bool{}
+	for _, it := range items {
+		it.Title = strings.TrimSpace(it.Title)
+		it.Author = strings.TrimSpace(it.Author)
+		if it.Title == "" || it.Author == "" {
+			skipped = append(skipped, batchResult{Title: it.Title, Author: it.Author, Error: "缺少诗名或诗人"})
+			continue
+		}
+		key := poemKey(it.Title, it.Author)
+		if seen[key] {
+			skipped = append(skipped, batchResult{Title: it.Title, Author: it.Author, Error: "与本次提交重复，已跳过"})
+			continue
+		}
+		seen[key] = true
+		pending = append(pending, it)
+	}
+	return pending, skipped
 }
 
 // AdminUpdatePoem 更新草稿/已发布内容（整体覆盖，含逐句）。
@@ -123,6 +391,13 @@ func (h *Handler) AdminUpdatePoem(c *gin.Context) {
 	body.CreatedAt = existing.CreatedAt
 	body.CommentCount = existing.CommentCount
 	body.Status = existing.Status
+	if dup, err := h.findDuplicate(body.Title, body.Author, id); err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	} else if dup != nil {
+		fail(c, http.StatusBadRequest, dupMessage(dup))
+		return
+	}
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		if e := tx.Where("poem_id = ?", id).Delete(&model.PoemLine{}).Error; e != nil {

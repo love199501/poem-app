@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	_ "time/tzdata"
 
 	"shijing/internal/config"
 	"shijing/internal/db"
@@ -12,6 +13,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+
+	// 打印实际使用的数据库连接目标（不含密码），便于定位云托管 1045/连接问题。
+	log.Printf("[db] 连接目标 user=%s host=%s port=%s db=%s", cfg.DBUser, cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	gdb, err := db.Open(cfg.DSN())
 	if err != nil {
@@ -36,6 +40,7 @@ func main() {
 	}
 
 	h := handler.New(gdb, cfg)
+	h.StartIllustBackfill()
 	r := router.Setup(h)
 
 	addr := ":" + cfg.AppPort

@@ -38,7 +38,7 @@
     </view>
   </view>
 
-  <view class="sec-title">诗单 <text class="more">共 {{poems.length}} 首</text></view>
+  <view class="sec-title">诗单 <text class="more">共 {{total}} 首</text></view>
 
   <!-- 列表 -->
   <view wx:for="{{poems}}" wx:key="id" class="item" data-id="{{item.id}}" bindtap="goDetail">
@@ -52,11 +52,11 @@
       <view class="li-pop">
         <text class="lp">♡ {{item.likeCount || 0}}</text>
         <text class="lp">★ {{item.favoriteCount || 0}}</text>
-        <text class="lp">💬 {{item.commentCount || 0}}</text>
+        <text wx:if="{{commentEnabled}}" class="lp">💬 {{item.commentCount || 0}}</text>
       </view>
     </view>
     <text class="li-m">›</text>
   </view>
 
-  <view wx:if="{{!loading && poems.length===0}}" class="empty">没有匹配的诗词</view>
+  <view wx:if="{{!loading && total===0}}" class="empty">没有匹配的诗词</view>
 </view>

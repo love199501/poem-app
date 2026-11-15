@@ -43,7 +43,8 @@ type imgResponse struct {
 	Images []struct {
 		URL string `json:"url"`
 	} `json:"images"`
-	Error *struct {
+	Message string `json:"message"`
+	Error   *struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }
@@ -81,8 +82,11 @@ func (c *Client) Generate(prompt string) ([]byte, error) {
 	if e := json.Unmarshal(body, &r); e != nil {
 		return nil, fmt.Errorf("文生图响应解析失败: %s", string(body))
 	}
-	if r.Error != nil {
+	if r.Error != nil && r.Error.Message != "" {
 		return nil, fmt.Errorf("文生图错误: %s", r.Error.Message)
+	}
+	if r.Message != "" && len(r.Data) == 0 && len(r.Images) == 0 {
+		return nil, fmt.Errorf("文生图错误: %s", r.Message)
 	}
 	if len(r.Data) > 0 {
 		if r.Data[0].B64JSON != "" {

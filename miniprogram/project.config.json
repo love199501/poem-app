@@ -27,7 +27,7 @@
       "outputPath": ""
     }
   },
-  "appid": "wx97e629140d38184b",
+  "appid": "wxe62f306ecc5f5d46",
   "projectname": "shijing-miniprogram",
   "libVersion": "latest",
   "simulatorPluginLibVersion": {},
@@ -35,5 +35,6 @@
     "ignore": [],
     "include": []
   },
-  "editorSetting": {}
+  "editorSetting": {},
+  "isGameTourist": false
 }

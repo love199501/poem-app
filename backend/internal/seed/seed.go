@@ -19,6 +19,15 @@ func Migrate(db *gorm.DB) error {
 		&model.Favorite{},
 		&model.PoemLike{},
 		&model.DailyTask{},
+		&model.Checkin{},
+		&model.Poet{},
+		&model.Feedback{},
+		&model.ReadHistory{},
+		&model.ImageFile{},
+		&model.PoetAskCredit{},
+		&model.PoetAskGrant{},
+		&model.AppSetting{},
+		&model.MemberOrder{},
 	)
 }
 

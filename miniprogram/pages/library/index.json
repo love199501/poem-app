@@ -1,4 +1,5 @@
 {
   "navigationBarTitleText": "诗库",
+  "onReachBottomDistance": 200,
   "usingComponents": {}
 }

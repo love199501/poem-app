@@ -3,29 +3,9 @@
   background: #f8f5ee;
   padding-bottom: 40rpx;
 }
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 16rpx 32rpx 8rpx;
-}
-.brand {
-  font-size: 40rpx;
-  font-weight: 700;
-  letter-spacing: 8rpx;
-}
-.search {
-  flex: 1;
-  background: #fff;
-  border-radius: 36rpx;
-  padding: 16rpx 26rpx;
-  font-size: 22rpx;
-  color: #a8a294;
-}
-
 /* 时辰问候 */
 .greet {
-  padding: 18rpx 36rpx 6rpx;
+  padding: 28rpx 36rpx 6rpx;
   display: flex;
   align-items: baseline;
   gap: 18rpx;
@@ -39,6 +19,20 @@
 .greet-sub {
   font-size: 23rpx;
   color: #9a9080;
+}
+
+.preloader {
+  position: fixed;
+  left: -2000px;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0;
+}
+.preloader image {
+  width: 2px;
+  height: 2px;
 }
 
 /* 滑动诗卡 */
@@ -111,14 +105,16 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 0;
 }
 .pcard-verse-tx {
+  width: 100%;
+}
+.pcard-verse-line {
+  display: block;
   font-size: 46rpx;
   line-height: 1.55;
   letter-spacing: 4rpx;
-  white-space: pre-wrap;
-  word-break: break-word;
+  color: #f0e8d6;
 }
 .pcard-foot {
   margin-top: auto;
@@ -185,45 +181,20 @@
   padding: 8rpx 20rpx;
 }
 
-/* 页码 + 换一换 */
+/* 换一换：与首页白卡片同一套圆角和阴影 */
 .deck-bar {
   display: flex;
-  align-items: center;
-  padding: 20rpx 40rpx 0;
-}
-.dots {
-  display: flex;
-  gap: 10rpx;
-  flex: 1;
-  flex-wrap: wrap;
-}
-.dot {
-  width: 12rpx;
-  height: 12rpx;
-  border-radius: 50%;
-  background: #d8d0bf;
-  transition: all 0.25s ease;
-}
-.dot.on {
-  width: 28rpx;
-  border-radius: 8rpx;
-  background: #b0392c;
-}
-.deck-info {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-}
-.deck-count {
-  font-size: 22rpx;
-  color: #9a9080;
+  justify-content: center;
+  padding-top: 8rpx;
 }
 .deck-swap {
-  font-size: 22rpx;
-  color: #b0392c;
-  border: 1rpx solid rgba(176, 57, 44, 0.4);
+  padding: 14rpx 40rpx;
+  background: #fff;
+  color: #5c5142;
+  font-size: 24rpx;
+  letter-spacing: 4rpx;
   border-radius: 40rpx;
-  padding: 8rpx 20rpx;
+  box-shadow: 0 6rpx 20rpx rgba(60, 50, 30, 0.06);
 }
 
 /* 心情速选（横向滚动） */

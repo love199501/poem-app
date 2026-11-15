@@ -38,6 +38,6 @@ func mockPoem(title, author string) *model.Poem {
 			{Key: "heart", Title: "诗人心", Body: "待补充"},
 			{Key: "era", Title: "时代音", Body: "待补充"},
 		},
-		AiPrompts: []string{"这首诗写于何时？"},
+		AiPrompts: []string{"你写这首诗的时候，心里在想什么？"},
 	}
 }

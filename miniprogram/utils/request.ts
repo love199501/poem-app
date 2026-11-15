@@ -1,4 +1,4 @@
-import { API } from '../config';
+import { API, BASE_URL, CLOUD_ENV, CLOUD_SERVICE, useCloud } from '../config';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -9,32 +9,71 @@ interface ReqOptions {
   silent?: boolean; // 为 true 时失败不弹 toast（用于乐观更新场景）
 }
 
-// request 统一封装：自动带上登录用户头 X-User-Id，并解包 {code,msg,data}。
+// rawCall 底层请求：云托管模式走 wx.cloud.callContainer（自动带 openid），否则走 wx.request。
+// apiPath 形如 '/api/poems'。返回 HTTP 层结果 {statusCode, data}。
+export function rawCall(
+  apiPath: string,
+  method: Method,
+  data: IAnyObject,
+  header: IAnyObject
+): Promise<{ statusCode: number; data: any }> {
+  return new Promise((resolve, reject) => {
+    const common = {
+      method,
+      data: data || {},
+      success: (res: any) => resolve({ statusCode: res.statusCode, data: res.data }),
+      fail: (err: any) => reject(err),
+    };
+    if (useCloud()) {
+      wx.cloud.callContainer({
+        config: { env: CLOUD_ENV },
+        path: apiPath,
+        header: { ...header, 'X-WX-SERVICE': CLOUD_SERVICE, 'content-type': 'application/json' },
+        ...common,
+      });
+    } else {
+      wx.request({
+        url: BASE_URL + apiPath,
+        header: { ...header, 'content-type': 'application/json' },
+        ...common,
+      });
+    }
+  });
+}
+
+// request 统一封装：自动带上登录凭证 X-Auth-Token，并解包 {code,msg,data}。
 export function request<T = any>(opts: ReqOptions): Promise<T> {
   const app = getApp();
-  const userId = (app && app.globalData && app.globalData.userId) || '';
+  const g = app && app.globalData;
+  const token = (g && (g.token || (g.user && g.user.token))) || '';
+  const path = API_PATH(opts.url);
   return new Promise((resolve, reject) => {
-    wx.request({
-      url: API + opts.url,
-      method: opts.method || 'GET',
-      data: opts.data || {},
-      header: {
-        'Content-Type': 'application/json',
-        'X-User-Id': String(userId),
-      },
-      success(res: any) {
+    rawCall(path, opts.method || 'GET', opts.data || {}, { 'X-Auth-Token': String(token) })
+      .then((res) => {
         const body = res.data || {};
         if (res.statusCode >= 200 && res.statusCode < 300 && body.code === 0) {
           resolve(body.data as T);
         } else {
-          if (!opts.silent) wx.showToast({ title: body.msg || '请求失败', icon: 'none' });
+          // 把真实状态码与返回体打到控制台，便于区分 404(路由不匹配)/5xx(服务异常)等。
+          console.error('[request fail]', path, 'status=', res.statusCode, 'body=', res.data);
+          const msg = body && body.msg ? body.msg : '请求失败(' + res.statusCode + ')';
+          if (!opts.silent) wx.showToast({ title: msg, icon: 'none' });
           reject(body);
         }
-      },
-      fail(err: any) {
+      })
+      .catch((err) => {
+        console.error('[request error]', path, err);
         if (!opts.silent) wx.showToast({ title: '网络异常', icon: 'none' });
         reject(err);
-      },
-    });
+      });
   });
 }
+
+// API_PATH 把业务路径拼成 /api 前缀路径（与 config.API 保持一致）。
+function API_PATH(url: string): string {
+  // API = BASE_URL + '/api'，这里只取 '/api' 段 + 业务路径，云/普通两种模式通用。
+  return '/api' + url;
+}
+
+// 兼容旧引用
+export { API };

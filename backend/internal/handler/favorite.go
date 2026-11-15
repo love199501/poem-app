@@ -88,9 +88,13 @@ func (h *Handler) TogglePoemLike(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
+	gain := 0
+	if liked {
+		gain = h.grantDaily(uid, "like", 1)
+	}
 	var p model.Poem
 	h.DB.Select("like_count").First(&p, poemID)
-	ok(c, gin.H{"liked": liked, "likeCount": p.LikeCount})
+	ok(c, gin.H{"liked": liked, "likeCount": p.LikeCount, "gainExp": gain})
 }
 
 // ListFavorites 返回当前用户收藏的诗（元信息），供个人中心「我的收藏」。

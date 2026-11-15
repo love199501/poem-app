@@ -75,6 +75,27 @@ type Config struct {
 	ImgModel   string // 如 dall-e-3 / Kwai-Kolors/Kolors / gpt-image-1
 	ImgSize    string // 如 1024x1024
 	ImgSearch  string // 插画检索：baidu / off
+
+	WechatAppID     string // 微信小程序 AppID（配置后走真实 jscode2session）
+	WechatSecret    string // 微信小程序 AppSecret
+	WxMchID         string // 微信支付商户号
+	WxMchSerial     string // 商户 API 证书序列号
+	WxMchPrivateKey string // 商户私钥 PEM，或私钥文件路径
+	WxAPIv3Key      string // 微信支付 APIv3 密钥，32 位
+	WxPayNotifyURL  string // 支付结果回调地址
+	RewardAdUnit    string // 激励视频广告位 ID，如 adunit-xxxx
+
+	// CommentEnabled 评论云控。审核期间设为 false 隐藏入口；过审后改为 true，无需再发版。
+	CommentEnabled bool
+}
+
+func firstEnv(keys ...string) string {
+	for _, key := range keys {
+		if v, ok := os.LookupEnv(key); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 func getenv(key, def string) string {
@@ -83,6 +104,21 @@ func getenv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envBool(key string, def bool) bool {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
 }
 
 func getenvInt(key string, def int) int {
@@ -97,13 +133,33 @@ func getenvInt(key string, def int) int {
 // Load 读取环境变量，缺省值面向本地开发。
 func Load() *Config {
 	loadDotEnv()
+
+	// 数据库：优先用微信云托管注入的 MYSQL_ADDRESS/MYSQL_USERNAME/MYSQL_PASSWORD；否则用 DB_*。
+	dbHost := getenv("DB_HOST", "127.0.0.1")
+	dbPort := getenv("DB_PORT", "3306")
+	dbUser := getenv("DB_USER", "root")
+	dbPass := getenv("DB_PASSWORD", "root")
+	if addr := os.Getenv("MYSQL_ADDRESS"); addr != "" {
+		if i := strings.LastIndex(addr, ":"); i > 0 {
+			dbHost, dbPort = addr[:i], addr[i+1:]
+		} else {
+			dbHost = addr
+		}
+	}
+	if u := os.Getenv("MYSQL_USERNAME"); u != "" {
+		dbUser = u
+	}
+	if p, ok := os.LookupEnv("MYSQL_PASSWORD"); ok {
+		dbPass = p
+	}
+
 	return &Config{
-		DBHost:      getenv("DB_HOST", "127.0.0.1"),
-		DBPort:      getenv("DB_PORT", "3306"),
-		DBUser:      getenv("DB_USER", "root"),
-		DBPassword:  getenv("DB_PASSWORD", "root"),
+		DBHost:      dbHost,
+		DBPort:      dbPort,
+		DBUser:      dbUser,
+		DBPassword:  dbPass,
 		DBName:      getenv("DB_NAME", "shijing"),
-		AppPort:     getenv("APP_PORT", "8080"),
+		AppPort:     getenv("PORT", getenv("APP_PORT", "8080")), // 云托管注入 PORT
 		AutoMigrate: getenv("AUTO_MIGRATE", "true") == "true",
 		Seed:        getenv("SEED", "true") == "true",
 
@@ -140,6 +196,17 @@ func Load() *Config {
 		ImgModel:   getenv("IMG_MODEL", "dall-e-3"),
 		ImgSize:    getenv("IMG_SIZE", "1024x1024"),
 		ImgSearch:  getenv("IMG_SEARCH", "baidu"),
+
+		WechatAppID:     getenv("WECHAT_APPID", ""),
+		WechatSecret:    getenv("WECHAT_SECRET", ""),
+		WxMchID:         firstEnv("WX_MCH_ID", "WECHAT_MCH_ID", "MCH_ID"),
+		WxMchSerial:     getenv("WX_MCH_CERT_SERIAL", ""),
+		WxMchPrivateKey: getenv("WX_MCH_PRIVATE_KEY", ""),
+		WxAPIv3Key:      getenv("WX_API_V3_KEY", ""),
+		WxPayNotifyURL:  getenv("WX_PAY_NOTIFY_URL", "https://golang-iyjf-344746-6-1528738627.sh.run.tcloudbase.com/api/pay/notify"),
+		RewardAdUnit:    getenv("REWARD_AD_UNIT", ""),
+
+		CommentEnabled: envBool("COMMENT_ENABLED", false),
 	}
 }
 

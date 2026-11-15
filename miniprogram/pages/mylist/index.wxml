@@ -2,13 +2,13 @@
   <view wx:if="{{loading}}" class="hint">加载中…</view>
 
   <view wx:elif="{{empty}}" class="empty">
-    <text class="empty-ic">{{type==='favorites' ? '⭐' : (type==='likes' ? '♥' : '💬')}}</text>
+    <text class="empty-ic">{{type==='favorites' ? '⭐' : (type==='reads' ? '📖' : (type==='likes' ? '♥' : '💬'))}}</text>
     <text class="empty-tx">这里还空空如也</text>
-    <text class="empty-sub">{{type==='favorites' ? '去诗库收藏喜欢的诗吧' : '去诗词下方留下你的感受吧'}}</text>
+    <text class="empty-sub">{{type==='favorites' ? '去诗库收藏喜欢的诗吧' : (type==='reads' ? '打开一首诗读一读，它会出现在这里' : '去诗词下方留下你的感受吧')}}</text>
   </view>
 
-  <!-- 收藏：诗卡 -->
-  <block wx:if="{{type==='favorites' && !loading && !empty}}">
+  <!-- 收藏 / 阅读历史：诗卡 -->
+  <block wx:if="{{(type==='favorites' || type==='reads') && !loading && !empty}}">
     <view wx:for="{{poems}}" wx:key="id" class="pcard" bindtap="goDetail" data-id="{{item.id}}">
       <image wx:if="{{item.illust}}" class="pc-img" src="{{item.illust}}" mode="aspectFill" lazy-load></image>
       <view wx:else class="pc-img pc-img-ph serif">诗</view>
@@ -16,14 +16,15 @@
         <view class="pc-title serif">{{item.title}}</view>
         <view class="pc-meta">{{item.dynasty}} · {{item.author}}</view>
         <view class="pc-verse">{{item.firstVerse}}</view>
-        <view class="pc-pop">♡ {{item.likeCount || 0}} · ★ {{item.favoriteCount || 0}} · 💬 {{item.commentCount || 0}}</view>
+        <view class="pc-pop" wx:if="{{type==='reads'}}">{{item.dateText}} 读过</view>
+        <view class="pc-pop" wx:else>♡ {{item.likeCount || 0}} · ★ {{item.favoriteCount || 0}}<text wx:if="{{commentEnabled}}"> · 💬 {{item.commentCount || 0}}</text></view>
       </view>
       <text class="pc-arrow">›</text>
     </view>
   </block>
 
   <!-- 评论 / 被赞：评论卡 -->
-  <block wx:if="{{type!=='favorites' && !loading && !empty}}">
+  <block wx:if="{{(type==='comments' || type==='likes') && !loading && !empty}}">
     <view wx:for="{{comments}}" wx:key="id" class="ccard" bindtap="goDetail" data-id="{{item.poemId}}">
       <view class="cc-top">
         <text class="cc-poem">《{{item.poemTitle}}》· {{item.poemAuthor}}</text>

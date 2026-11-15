@@ -15,6 +15,27 @@ func TestNormalizeDynasty(t *testing.T) {
 	if got := NormalizeDynasty("近现代"); got != "近现代" {
 		t.Fatalf("近现代应保持原样, got %q", got)
 	}
+	if got := NormalizeDynasty("现代"); got != "近现代" {
+		t.Fatalf("现代 => %q", got)
+	}
+	if got := NormalizeDynasty("现"); got != "近现代" {
+		t.Fatalf("现 => %q", got)
+	}
+	if got := NormalizeDynasty("战国"); got != "先秦" {
+		t.Fatalf("战国 => %q", got)
+	}
+	if got := NormalizeDynasty("南朝宋"); got != "南北朝" {
+		t.Fatalf("南朝宋 => %q", got)
+	}
+	if got := NormalizeDynasty("宋"); got != "宋" {
+		t.Fatalf("宋应保持原样, got %q", got)
+	}
+	if got := NormalizeDynasty("南唐"); got != "五代" {
+		t.Fatalf("南唐 => %q", got)
+	}
+	if got := NormalizeDynasty("魏"); got != "魏晋" {
+		t.Fatalf("魏 => %q", got)
+	}
 }
 
 func TestDynastyVariants(t *testing.T) {

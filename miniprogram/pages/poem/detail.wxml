@@ -1,24 +1,10 @@
 <view class="page" wx:if="{{poem}}">
 
-  <!-- 步骤条 -->
-  <view class="stepbar">
-    <view wx:for="{{steps}}" wx:key="key" class="step {{curStep===item.key?'on':''}}"
-          data-key="{{item.key}}" bindtap="goStep">
-      <text class="s-k serif">{{item.k}}</text>
-      <text class="s-l">{{item.label}}</text>
-    </view>
-  </view>
-
-  <scroll-view scroll-y class="body" scroll-into-view="{{intoView}}" scroll-with-animation
-               bindscroll="onScroll" throttle="{{false}}">
-
-    <!-- 读 -->
-    <view id="sec-read" class="anchor"></view>
-    <view class="lead"><text class="lead-k serif">读</text>原文 · 注释 · 译文</view>
+  <scroll-view scroll-y class="body" scroll-into-view="{{intoView}}" scroll-with-animation>
 
     <view class="poem-head">
       <view class="poem-title serif">{{poem.title}}</view>
-      <view class="poem-author">{{poem.dynasty}} · {{poem.author}} · {{poem.form}} · {{poem.yearLabel}}</view>
+      <view class="poem-author">{{poem.dynasty}} · {{poem.author}} · {{poem.form}} · {{poem.yearLabel}} <text class="author-link" catchtap="goPoet">人生卷轴 ›</text></view>
       <view class="tags">
         <text wx:for="{{poem.tags}}" wx:key="*this" class="tag">{{item}}</text>
       </view>
@@ -28,7 +14,7 @@
           <text class="pop-l">点赞</text>
         </view>
         <view class="pop-i"><text class="pop-ic">★</text><text class="pop-n">{{favoriteCount}}</text><text class="pop-l">收藏</text></view>
-        <view class="pop-i"><text class="pop-ic">💬</text><text class="pop-n">{{poem.commentCount}}</text><text class="pop-l">评论</text></view>
+        <view wx:if="{{commentEnabled}}" class="pop-i"><text class="pop-ic">💬</text><text class="pop-n">{{poem.commentCount}}</text><text class="pop-l">评论</text></view>
       </view>
     </view>
 
@@ -37,29 +23,38 @@
             class="poem-line {{activeLine===index?'active':''}}">{{item.text}}</view>
     </view>
     <view class="poem-tip">点击任意一句，查看对应注释</view>
-
-    <view class="fold" wx:if="{{note}}">
-      <view class="fold-head"><text class="dot"></text>注释</view>
-      <view class="note-line serif">{{note.text}}</view>
-      <rich-text class="note-body" nodes="{{note.body}}"></rich-text>
-      <view class="note-src">{{note.src}}</view>
+    <view class="entry-row">
+      <view class="entry-ask {{panel==='ask'?'on':''}}" data-key="ask" bindtap="pickPanel">与{{poem.author}}对话</view>
+      <view wx:if="{{commentEnabled}}" class="entry-talk {{panel==='talk'?'on':''}}" data-key="talk" bindtap="pickPanel">评论 {{poem.commentCount || 0}}</view>
+    </view>
+    <view class="share-entry" catchtap="openShare">
+      <text class="share-entry-seal">签</text>
+      <text>生成诗签</text>
     </view>
 
-    <view class="fold" wx:if="{{hasTrans}}">
-      <view class="fold-head" bindtap="toggleTrans">
-        <text class="dot"></text>译文
-        <text class="chev">{{showTrans?'▲':'▼'}}</text>
+    <scroll-view wx:if="{{menus.length}}" scroll-x class="midbar" show-scrollbar="{{false}}">
+      <text wx:for="{{menus}}" wx:key="key" class="mid {{panel===item.key?'on':''}}"
+            data-key="{{item.key}}" bindtap="pickPanel">{{item.label}}</text>
+    </scroll-view>
+
+    <block wx:if="{{panel==='note'}}">
+      <view class="fold" wx:if="{{note}}">
+        <view class="note-line serif">{{note.text}}</view>
+        <rich-text class="note-body" nodes="{{note.body}}"></rich-text>
+        <view class="note-src">{{note.src}}</view>
       </view>
-      <view wx:if="{{showTrans}}" class="trans">
+      <view wx:else class="poem-tip">点击任意一句，查看对应注释</view>
+    </block>
+
+    <view class="fold" wx:if="{{panel==='trans'}}">
+      <view class="trans">
         <view wx:for="{{poem.translation}}" wx:key="*this" class="trans-p">{{item}}</view>
         <view class="note-src">{{poem.transSource}}</view>
       </view>
     </view>
 
     <!-- 境 -->
-    <block wx:if="{{hasScene}}">
-      <view id="sec-scene" class="anchor"></view>
-      <view class="lead"><text class="lead-k serif">境</text>创作现场 · 他经历了什么</view>
+    <block wx:if="{{panel==='scene'}}">
 
       <view class="scene" wx:if="{{poem.sceneRows.length || poem.scenePunch || poem.sceneBackground || poem.sceneTitle}}">
         <view class="scene-title serif">{{poem.sceneTitle}}</view>
@@ -76,9 +71,7 @@
     </block>
 
     <!-- 意 -->
-    <block wx:if="{{hasIntent}}">
-      <view id="sec-intent" class="anchor"></view>
-      <view class="lead"><text class="lead-k serif">意</text>创作意图 · 他想说什么</view>
+    <block wx:if="{{panel==='intent'}}">
 
       <view class="intent-lead" wx:if="{{poem.intentLead}}">
         <view class="il-q serif">{{poem.intentLead}}</view>
@@ -101,9 +94,7 @@
     </block>
 
     <!-- 悟 -->
-    <block wx:if="{{hasWu}}">
-      <view id="sec-wu" class="anchor"></view>
-      <view class="lead"><text class="lead-k serif">悟</text>三层解析 · 越读越深</view>
+    <block wx:if="{{panel==='wu'}}">
 
       <view wx:for="{{poem.layers}}" wx:key="key" class="card layer">
         <view class="layer-t red">{{item.title}}</view>
@@ -112,7 +103,7 @@
 
       <block wx:if="{{poem.quotes.length}}">
         <view class="sec-title">名家诗话</view>
-        <scroll-view scroll-x class="quote-scroll" enhanced="{{true}}" show-scrollbar="{{false}}">
+        <scroll-view scroll-x class="quote-scroll" show-scrollbar="{{false}}">
           <view wx:for="{{poem.quotes}}" wx:key="source" class="quote hcard">
             <view class="qt serif">{{item.text}}</view>
             <view class="qs">—— {{item.source}}</view>
@@ -131,9 +122,40 @@
       </block>
     </block>
 
-    <!-- 议 · 这首诗的讨论区 -->
-    <view id="sec-talk" class="anchor"></view>
-    <view class="lead"><text class="lead-k serif">议</text>这首诗的讨论区 · {{poem.commentCount}} 条</view>
+    <block wx:if="{{panel==='ask'}}">
+      <view class="ask">
+        <view class="ask-note">内容由 AI 生成，仅供参考</view>
+        <view wx:if="{{isMember}}" class="ask-lock quiet">会员对话不限次数</view>
+        <view wx:elif="{{askRemain > 0}}" class="ask-lock quiet">还可与这位诗人对话 {{askRemain}} 次 · 看广告可再增加</view>
+        <view wx:else class="ask-lock">看完广告即可与这位诗人对话 {{askPerAd}} 次</view>
+        <view class="ask-row author">
+          <view class="ask-ava">{{authorChar}}</view>
+          <view class="ask-bubble">我是{{poem.author}}。你正在读《{{poem.title}}》。想知道我落笔时看见了什么、心里在想什么，直接问我。</view>
+        </view>
+        <view wx:for="{{asks}}" wx:key="index" class="ask-row {{item.role==='user'?'mine':'author'}}">
+          <view wx:if="{{item.role!=='user'}}" class="ask-ava">{{authorChar}}</view>
+          <view class="ask-bubble">
+            <text class="ask-tx">{{item.content}}</text>
+            <text wx:if="{{item.source}}" class="ask-src">{{item.source}}</text>
+          </view>
+          <view wx:if="{{item.role==='user'}}" class="ask-ava mine">我</view>
+        </view>
+        <view wx:if="{{askBusy}}" class="ask-row author">
+          <view class="ask-ava">{{authorChar}}</view>
+          <view class="ask-bubble">我想一想…</view>
+        </view>
+        <view class="ask-chips">
+          <view wx:for="{{askPrompts}}" wx:key="*this" class="ask-chip" data-q="{{item}}" bindtap="askText">{{item}}</view>
+        </view>
+        <view class="ask-bar">
+          <input class="ask-in" placeholder="发消息给{{poem.author}}…" value="{{askInput}}" bindinput="onAskInput" confirm-type="send" bindconfirm="sendAsk" disabled="{{askBusy}}"/>
+          <view class="ask-send {{askBusy?'off':''}}" catchtap="sendAsk">↑</view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 议 · 这首诗的讨论区（评论云控关闭时整段不渲染） -->
+    <block wx:if="{{panel==='talk'}}">
 
     <view class="talk-bar">
       <text class="tb {{sort==='hot'?'on':''}}" data-v="hot" bindtap="switchSort">热门</text>
@@ -161,9 +183,6 @@
           <view class="act" data-pid="{{item.id}}" data-name="{{item.authorName}}" catchtap="focusComment" hover-class="act-hover">
             <text class="act-ic">💬</text>
             <text class="act-n">{{item.replyCount}}</text>
-          </view>
-          <view class="act pin {{item.isPinned?'on':''}}" data-id="{{item.id}}" catchtap="pin" hover-class="act-hover">
-            <text>{{item.isPinned?'已置顶':'置顶'}}</text>
           </view>
         </view>
 
@@ -206,6 +225,8 @@
       <text class="ti-send" catchtap="submit">发送</text>
     </view>
 
+    </block>
+
     <view style="height:40rpx"></view>
   </scroll-view>
 
@@ -219,6 +240,10 @@
       </view>
       <view class="ab-track"><view class="ab-i" style="width:{{audio.pct}}%"></view></view>
     </view>
+    <view class="ab-fav ab-like {{liked?'on':''}}" catchtap="toggleLikePoem">
+      <text class="ab-fav-ic">{{liked ? '♥' : '♡'}}</text>
+      <text class="ab-fav-tx">{{liked ? '已赞' : '点赞'}}</text>
+    </view>
     <view class="ab-fav {{favored?'on':''}}" catchtap="toggleFav">
       <text class="ab-fav-ic">{{favored ? '★' : '☆'}}</text>
       <text class="ab-fav-tx">{{favored ? '已藏' : '收藏'}}</text>
@@ -227,3 +252,48 @@
 </view>
 
 <view wx:else class="loading">加载中…</view>
+
+<view wx:if="{{shareOpen}}" class="share-mask" catchtap="closeShare">
+  <view class="share-sheet" catchtap="noop">
+    <view class="share-h">生成你的专属诗签</view>
+    <view class="share-card theme-{{shareTheme}}">
+      <image wx:if="{{shareTheme==='illust' && shareIllust}}" class="share-bg" src="{{shareIllust}}" mode="aspectFill"></image>
+      <view wx:if="{{shareTheme==='illust'}}" class="share-bg-mask"></view>
+      <view wx:if="{{shareTheme!=='illust'}}" class="share-ring"></view>
+      <view class="share-top">
+        <view class="vcols">
+          <view wx:for="{{shareCols}}" wx:key="index" class="vcol">
+            <text wx:for="{{item}}" wx:for-item="ch" wx:key="index" class="vch serif">{{ch}}</text>
+          </view>
+        </view>
+        <view class="share-side">
+          <view class="seal serif"><text>诗趣</text><text>小园</text></view>
+          <image wx:if="{{shareCode}}" class="qr-img" src="{{shareCode}}" mode="aspectFit"></image>
+          <view wx:else class="qr-fallback"></view>
+          <text class="qr-cap">{{shareCode ? '长按识别' : '诗趣小园'}}</text>
+        </view>
+      </view>
+      <view wx:if="{{shareQuote}}" class="share-quote">
+        <text class="share-quote-k">名家诗话</text>
+        <text class="share-quote-tx serif">{{shareQuote.text}}</text>
+        <text wx:if="{{shareQuote.source}}" class="share-quote-src">—— {{shareQuote.source}}</text>
+      </view>
+      <view class="share-foot serif">《{{poem.title}}》 · {{poem.author}}</view>
+    </view>
+
+    <view class="theme-row">
+      <view wx:for="{{themes}}" wx:key="key" class="theme-chip {{shareTheme===item.key?'on':''}}"
+            data-key="{{item.key}}" catchtap="pickTheme">{{item.name}}</view>
+    </view>
+
+    <view class="share-acts">
+      <view class="sa ghost" catchtap="saveShareCard">保存图片</view>
+      <button class="sa primary" open-type="share" bindtap="reportShare">分享给朋友</button>
+    </view>
+    <view class="share-note">发朋友圈 · 卡片自带小程序码</view>
+  </view>
+</view>
+
+<canvas canvas-id="shareCard" class="share-canvas"></canvas>
+<image wx:if="{{shareIllust}}" class="illust-preload" src="{{shareIllust}}" />
+<image wx:if="{{shareCode}}" class="illust-preload" src="{{shareCode}}" />

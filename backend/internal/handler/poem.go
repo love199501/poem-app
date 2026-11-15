@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -22,8 +23,17 @@ func (h *Handler) ListPoems(c *gin.Context) {
 
 	tx := h.DB.Model(&model.Poem{}).
 		Select("id,title,dynasty,author,form,year_label,first_verse,audio_url,illust_url,tags,moods,comment_count,like_count,favorite_count,created_at").
-		Where("status <> ?", "draft").
-		Order("id asc")
+		Where("status <> ?", "draft")
+	// sample>0 时随机取一小叠，供首页卡片。整库塞进 swiper 时组件会渲染失败。
+	sample, _ := strconv.Atoi(c.Query("sample"))
+	if sample > 0 {
+		if sample > 30 {
+			sample = 30
+		}
+		tx = tx.Order("RAND()").Limit(sample)
+	} else {
+		tx = tx.Order("id asc")
+	}
 
 	if dynasty != "" && dynasty != "全部" {
 		// 「唐」同时命中库里可能残留的「唐代 / 唐朝」。
@@ -61,7 +71,13 @@ func normalizeDynasties(poems []model.Poem) {
 }
 
 // 朝代、心情的推荐展示顺序：只保留库中实际出现的，其余按出现顺序追加。
-var dynastyOrder = []string{"先秦", "汉", "魏晋", "南北朝", "隋", "唐", "五代", "宋", "辽", "金", "元", "明", "清", "近现代", "现代"}
+var dynastyOrder = []string{
+	"先秦", "秦", "汉",
+	"魏晋",
+	"南北朝",
+	"隋", "唐", "五代", "宋", "辽", "金",
+	"元", "明", "清", "近现代",
+}
 var moodOrder = []string{"忧国", "思乡", "旷达", "孤独", "喜悦", "离别", "爱情", "闲适", "哲理", "愤懑", "感伤", "豪放"}
 
 // freq 记录字符串的出现顺序与计数，用于稳定聚合。
@@ -172,9 +188,14 @@ func (h *Handler) fillDisplayVerses(poems []model.Poem) {
 	if len(poems) == 0 {
 		return
 	}
-	ids := make([]uint, len(poems))
+	ids := make([]uint, 0, len(poems))
 	for i, p := range poems {
-		ids[i] = p.ID
+		if !model.DisplayVerseComplete(p.FirstVerse) {
+			ids = append(ids, poems[i].ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
 	}
 	var lines []model.PoemLine
 	h.DB.Select("poem_id,seq,text").Where("poem_id IN ?", ids).Order("poem_id, seq").Find(&lines)

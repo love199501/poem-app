@@ -30,6 +30,11 @@ func CompleteDisplayVerse(verse string, lines []PoemLine) string {
 	return ensureVerseStop(cur)
 }
 
+// DisplayVerseComplete 这一句在列表上是否已经完整，完整的不必再查逐句原文。
+func DisplayVerseComplete(s string) bool {
+	return displayVerseComplete(s)
+}
+
 func displayVerseComplete(s string) bool {
 	s = strings.TrimSpace(s)
 	if s == "" {

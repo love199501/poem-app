@@ -1,0 +1,9 @@
+# 本地构建产物，不进镜像
+server
+tmp/
+# 运行期生成的静态资源（容器内为临时盘，勿打进镜像）
+web/audio/
+web/images/
+web/avatars/
+*.log
+.DS_Store

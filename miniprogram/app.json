@@ -3,6 +3,8 @@
     "pages/index/index",
     "pages/library/index",
     "pages/poem/detail",
+    "pages/poet/scroll",
+    "pages/history/index",
     "pages/profile/index",
     "pages/mylist/index"
   ],
@@ -21,6 +23,7 @@
     "list": [
       { "pagePath": "pages/index/index", "text": "发现" },
       { "pagePath": "pages/library/index", "text": "诗库" },
+      { "pagePath": "pages/history/index", "text": "历史" },
       { "pagePath": "pages/profile/index", "text": "我的" }
     ]
   },

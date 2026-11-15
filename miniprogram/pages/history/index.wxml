@@ -1,0 +1,37 @@
+<view class="page">
+  <view class="head">
+    <view class="title serif">历史卷轴</view>
+    <view class="sub">沿朝代往下看，诗人按受欢迎程度排列</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="empty">展开卷轴…</view>
+  <view wx:elif="{{!dynasties.length}}" class="empty">还没有可展示的朝代</view>
+
+  <view wx:for="{{dynasties}}" wx:key="name" class="era">
+    <view class="rail">
+      <view class="dot {{open===item.name?'on':''}}"></view>
+      <view class="line"></view>
+    </view>
+    <view class="body">
+      <view class="era-hd" data-name="{{item.name}}" bindtap="toggle">
+        <text class="era-name serif">{{item.name}}</text>
+        <text class="era-meta">{{item.poets.length}} 人 · {{item.poemCount}} 首</text>
+        <text class="era-chev">{{open===item.name?'▴':'▾'}}</text>
+      </view>
+      <view wx:if="{{open===item.name}}" class="poets">
+        <view
+          wx:for="{{item.poets}}"
+          wx:for-item="p"
+          wx:key="name"
+          class="poet"
+          data-author="{{p.name}}"
+          data-dynasty="{{item.name}}"
+          bindtap="goPoet"
+        >
+          <text class="poet-name serif">{{p.name}}</text>
+          <text class="poet-meta">{{p.poems}} 首</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -35,6 +35,20 @@ button{cursor:pointer;border:none;border-radius:20px;padding:9px 16px;font-weigh
 .ops{margin-left:auto;display:flex;gap:6px}
 .ops button{padding:5px 10px;font-size:11px;font-weight:400}
 .hint{font-size:12px;color:#9a9384;margin-top:8px}
+.illust-prev{display:block;width:100%;max-height:240px;object-fit:contain;background:#f6f1e6;border-radius:12px;margin:12px 0;border:1px solid #e2dccd}
+.batch{margin-bottom:18px}
+.batch textarea{min-height:140px}
+.check{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:#5b554a}
+.check input{width:auto}
+.brow{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f0ebdf;font-size:13px}
+.brow .err{color:#b0392c;margin-left:auto}
+.brow .ok{color:#3f6f62;margin-left:auto}
+.brow .warn{color:#a8623b;margin-left:8px}
+.list-search{display:flex;gap:8px;margin:10px 0 4px}
+.list-search input{width:auto;flex:1;min-width:0}
+.list-search button{flex:none;padding:6px 14px;font-size:12px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;font-size:12px;color:#8a8477}
+.pager button:disabled{opacity:.4;cursor:default}
 .mock{color:#b0392c}
 .hidden{display:none}
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#232019;color:#f3ecdc;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:9}
@@ -60,6 +74,16 @@ button{cursor:pointer;border:none;border-radius:20px;padding:9px 16px;font-weigh
 <div id="app" class="wrap hidden">
   <h1>诗境 · 管理后台</h1>
   <div class="sub">输入诗名与诗人，大模型补全各模块内容；审核无误后发布。<span id="llmTip"></span></div>
+  <div class="card batch">
+    <strong>批量新增</strong>
+    <div class="hint">每行一首，诗名和诗人用空格分开。一次最多 100 首，同时生成 10 首。诗名加诗人相同（忽略书名号和空格）会自动跳过。</div>
+    <textarea id="batchText" placeholder="登高 杜甫&#10;春望 杜甫&#10;静夜思 李白"></textarea>
+    <label class="check"><input id="batchPublish" type="checkbox" checked /> 生成后直接发布（不勾选则存为草稿）</label>
+    <div class="btns">
+      <button class="btn-gold" id="batchBtn" onclick="batchCreate()">并发新增</button>
+    </div>
+    <div id="batchResult"></div>
+  </div>
   <div class="row">
     <!-- 列表 -->
     <div class="col-list card">
@@ -67,7 +91,12 @@ button{cursor:pointer;border:none;border-radius:20px;padding:9px 16px;font-weigh
         <strong>诗词列表</strong>
         <button class="btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="newPoem()">+ 新建</button>
       </div>
+      <div class="list-search">
+        <input id="listQ" placeholder="搜索诗名 / 诗人 / 朝代 / 名句" onkeydown="if(event.key==='Enter')searchList()" />
+        <button class="btn-ghost" onclick="searchList()">检索</button>
+      </div>
       <div id="list"></div>
+      <div id="pager" class="pager"></div>
     </div>
     <!-- 编辑 -->
     <div class="col-edit card">
@@ -81,27 +110,41 @@ button{cursor:pointer;border:none;border-radius:20px;padding:9px 16px;font-weigh
       </div>
       <label>内容（JSON，可人工校对/修改）</label>
       <textarea id="json" placeholder="点「AI 生成内容」后在此预览并编辑…"></textarea>
+      <div id="illustBox"></div>
       <div class="btns">
         <button class="btn" onclick="saveDraft()">保存为草稿</button>
         <button class="btn-ghost" onclick="update()">更新当前</button>
         <button class="btn-ghost" onclick="genIllust()">🖼 重新生成插画</button>
         <button class="btn-red" onclick="publish()">✅ 审批发布</button>
       </div>
-      <div id="illustBox"></div>
       <div class="hint">说明：AI 生成内容时会一并生成人物水墨插画（需配置 IMG_API_KEY）；保存/更新均为草稿态，审批发布后才对小程序可见。</div>
     </div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div style="display:flex;align-items:center">
+      <strong>评论</strong>
+      <button class="btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadComments()">刷新</button>
+    </div>
+    <div id="comments" class="hint">登录后显示用户评论，可置顶。</div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div style="display:flex;align-items:center">
+      <strong>建议与反馈</strong>
+      <button class="btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadFeedbacks()">刷新</button>
+    </div>
+    <div id="feedbacks" class="hint">登录后显示用户提交的建议与反馈。</div>
   </div>
 </div>
 <script>
 const T = id => document.getElementById(id);
 function toast(m){ const t=T('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
-function adminId(){ return localStorage.getItem('adminId') || ''; }
+function adminToken(){ return localStorage.getItem('adminToken') || ''; }
 function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 async function api(method, path, body){
   const res = await fetch(path, {
     method,
-    headers: { 'Content-Type':'application/json', 'X-User-Id': adminId() },
+    headers: { 'Content-Type':'application/json', 'X-Auth-Token': adminToken() },
     body: body ? JSON.stringify(body) : undefined,
   });
   const j = await res.json().catch(()=>({}));
@@ -111,17 +154,77 @@ async function api(method, path, body){
 
 async function login(){
   const key = T('key').value.trim();
-  try{ const j = await api('POST','/api/admin/login',{key}); localStorage.setItem('adminId', j.data.id); enter(); }
+  try{ const j = await api('POST','/api/admin/login',{key}); localStorage.setItem('adminToken', (j.data && j.data.token) || ''); enter(); }
   catch(e){ toast(e.message); }
 }
-function enter(){ T('login').classList.add('hidden'); T('app').classList.remove('hidden'); loadList(); }
+function enter(){ T('login').classList.add('hidden'); T('app').classList.remove('hidden'); loadList(); loadComments(); loadFeedbacks(); }
+async function loadComments(){
+  const box = T('comments');
+  if(!box) return;
+  try{
+    const j = await api('GET','/api/admin/comments');
+    const list = j.data || [];
+    if(!list.length){ box.innerHTML = '<div class="hint">还没有评论</div>'; return; }
+    box.innerHTML = list.map(c => {
+      const when = (c.createdAt || '').replace('T',' ').slice(0,16);
+      const pin = c.isPinned ? '取消置顶' : '置顶';
+      return '<div class="item"><div style="flex:1;min-width:0"><div class="t">'+esc(c.authorName || '诗友')+' · 《'+esc(c.poemTitle || '未知诗文')+'》</div><div class="meta">'+(c.isPinned?'已置顶 · ':'')+esc(when)+' · '+ (c.likeCount||0) +' 赞</div><div style="margin-top:6px;white-space:pre-wrap">'+esc(c.content)+'</div></div><div class="ops"><button class="btn-ghost" onclick="pinComment('+c.id+')">'+pin+'</button></div></div>';
+    }).join('');
+  }catch(e){ box.textContent = e.message; }
+}
+async function pinComment(id){
+  try{
+    await api('POST','/api/admin/comments/'+id+'/pin');
+    toast('已更新置顶');
+    loadComments();
+  }catch(e){ toast(e.message); }
+}
+async function loadFeedbacks(){
+  const box = T('feedbacks');
+  if(!box) return;
+  try{
+    const j = await api('GET','/api/admin/feedbacks');
+    const list = j.data || [];
+    if(!list.length){ box.innerHTML = '<div class="hint">还没有反馈</div>'; return; }
+    box.innerHTML = list.map(f => {
+      const when = (f.createdAt || '').replace('T',' ').slice(0,16);
+      return '<div class="item"><div><div class="t">'+esc(f.nickname || '诗友')+'</div><div class="meta">'+esc(f.phone || '未绑定手机')+' · '+esc(when)+'</div><div style="margin-top:6px;white-space:pre-wrap">'+esc(f.content)+'</div></div></div>';
+    }).join('');
+  }catch(e){ box.textContent = e.message; }
+}
 
 let editId = 0;
+let listPage = 1;
+let listQ = '';
+const listSize = 10;
 function setEdit(id){ editId = id; T('editingId').textContent = id ? ('当前编辑 ID: '+id) : ''; }
 
-async function loadList(){
-  try{ const j = await api('GET','/api/admin/poems'); renderList(j.data||[]); }
-  catch(e){ toast(e.message); }
+function searchList(){
+  listQ = (T('listQ').value || '').trim();
+  loadList(1);
+}
+async function loadList(page){
+  if(typeof page === 'number') listPage = page;
+  if(listPage < 1) listPage = 1;
+  try{
+    const j = await api('GET','/api/admin/poems?page='+listPage+'&pageSize='+listSize+'&q='+encodeURIComponent(listQ));
+    const d = j.data || {};
+    const list = Array.isArray(d) ? d : (d.list || []);
+    const total = Array.isArray(d) ? list.length : (d.total || 0);
+    const pages = Math.max(1, Math.ceil(total / listSize));
+    if(list.length === 0 && listPage > pages){
+      listPage = pages;
+      return loadList();
+    }
+    renderList(list);
+    renderPager(total, pages);
+  }catch(e){ toast(e.message); }
+}
+function renderPager(total, pages){
+  T('pager').innerHTML = `
+    <button class="btn-ghost" ${listPage<=1?'disabled':''} onclick="loadList(${listPage-1})">上一页</button>
+    <span>${listPage} / ${pages} · 共 ${total} 首</span>
+    <button class="btn-ghost" ${listPage>=pages?'disabled':''} onclick="loadList(${listPage+1})">下一页</button>`;
 }
 function renderList(list){
   T('list').innerHTML = list.map(p => `
@@ -141,6 +244,33 @@ function renderList(list){
 }
 function newPoem(){ setEdit(0); T('title').value=''; T('author').value=''; T('json').value=''; }
 
+async function batchCreate(){
+  const text = T('batchText').value.trim();
+  if(!text){ toast('请按「诗名 诗人」每行填写'); return; }
+  const btn = T('batchBtn');
+  btn.disabled = true;
+  T('batchResult').innerHTML = '<div class="hint">并发生成中，请勿关闭页面…</div>';
+  try{
+    const j = await api('POST','/api/admin/poems/batch',{ text, publish: T('batchPublish').checked });
+    const d = j.data || {};
+    const rows = (d.results || []).map(r => `
+      <div class="brow">
+        <span>${esc(r.title)} · ${esc(r.author)}</span>
+        ${r.error
+          ? `<span class="err">${esc(r.error)}</span>`
+          : `<span class="ok">${r.status==='published'?'已发布':'已存草稿'} #${r.id}</span>${r.warn ? `<span class="warn">${esc(r.warn)}</span>` : ''}`}
+      </div>`).join('');
+    T('batchResult').innerHTML = `<div class="hint">完成 ${d.ok||0} 首，失败 ${d.fail||0} 首</div>` + rows;
+    toast('批量新增完成');
+    loadList(1);
+  }catch(e){
+    T('batchResult').innerHTML = '';
+    toast(e.message);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
 async function generate(){
   const title = T('title').value.trim(), author = T('author').value.trim();
   if(!title || !author){ toast('请填写诗名与诗人'); return; }
@@ -156,9 +286,11 @@ async function generate(){
 function fullURL(u){ return u && (u.indexOf('http')===0 ? u : location.origin + u); }
 function renderIllust(poem){
   const u = poem && poem.illustrationUrl;
-  T('illustBox').innerHTML = u
-    ? `<img src="${fullURL(u)}" style="max-width:100%;border-radius:12px;margin-top:12px;border:1px solid #e2dccd"/>`
-    : '';
+  if(!u){ T('illustBox').innerHTML = '<div class="hint">暂无插画</div>'; return; }
+  const src = fullURL(u);
+  T('illustBox').innerHTML =
+    `<img class="illust-prev" src="${src}" alt="插画" onerror="this.style.display='none';this.nextElementSibling.hidden=false">` +
+    `<div class="hint" hidden>插画文件已丢失，请点「重新生成插画」</div>`;
 }
 async function genIllust(){
   if(!editId){ toast('请先保存草稿再生成插画'); return; }
@@ -180,7 +312,7 @@ function parseJSON(){
 
 async function saveDraft(){
   let poem; try{ poem = parseJSON(); }catch(e){ return; }
-  try{ const j = await api('POST','/api/admin/poems',poem); setEdit(j.data.id); toast('已保存为草稿'); loadList(); }
+  try{ const j = await api('POST','/api/admin/poems',poem); setEdit(j.data.id); toast('已保存为草稿'); loadList(1); }
   catch(e){ toast(e.message); }
 }
 async function update(){
@@ -216,7 +348,7 @@ async function editPoem(id){
   }catch(e){ toast(e.message); }
 }
 
-if(adminId()) enter();
+if(adminToken()) enter();
 </script>
 </body>
 </html>

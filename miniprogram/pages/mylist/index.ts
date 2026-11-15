@@ -1,8 +1,10 @@
 import { request } from '../../utils/request';
+import { loadCommentEnabled } from '../../utils/flags';
 import { BASE_URL } from '../../config';
 
 const TITLES: Record<string, string> = {
   favorites: '我的收藏',
+  reads: '阅读历史',
   comments: '我的评论',
   likes: '获赞评论',
 };
@@ -23,6 +25,7 @@ Page({
     comments: [] as any[],
     loading: true,
     empty: false,
+    commentEnabled: false,
   },
 
   onLoad(options: any) {
@@ -30,15 +33,29 @@ Page({
     const title = TITLES[type] || '列表';
     wx.setNavigationBarTitle({ title });
     this.setData({ type, title });
-    this.fetch();
+    loadCommentEnabled().then((on) => {
+      if (!on && (type === 'comments' || type === 'likes')) {
+        this.setData({ commentEnabled: false, loading: false, empty: true });
+        return;
+      }
+      this.setData({ commentEnabled: on });
+      this.fetch();
+    });
   },
 
   fetch() {
     const type = this.data.type;
-    if (type === 'favorites') {
-      request<any[]>({ url: '/users/me/favorites' })
+    if (type === 'favorites' || type === 'reads') {
+      const url = type === 'reads' ? '/users/me/history' : '/users/me/favorites';
+      request<any[]>({ url })
         .then((list) => {
-          const poems = (list || []).map((p) => ({ ...p, illust: toFull(p.illustrationUrl || '') }));
+          const poems = (list || [])
+            .filter((p) => String(p.firstVerse || '').trim())
+            .map((p) => ({
+              ...p,
+              illust: toFull(p.illustrationUrl || ''),
+              dateText: fmtDate(p.readAt),
+            }));
           this.setData({ poems, loading: false, empty: poems.length === 0 });
         })
         .catch(() => this.setData({ loading: false, empty: true }));
