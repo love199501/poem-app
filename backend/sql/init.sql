@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS `poem_lines` (
   `text`      VARCHAR(255) NULL,
   `note_body` TEXT         NULL,
   `note_src`  VARCHAR(255) NULL,
+  `rubies`    LONGTEXT     NULL,
   PRIMARY KEY (`id`),
   KEY `idx_poem_lines_poem_id` (`poem_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -188,6 +189,20 @@ CREATE TABLE IF NOT EXISTS `poet_ask_grants` (
   KEY `idx_ask_grant` (`user_id`, `day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 已有库升级：诗句增加难字注音。可重复执行。
+SET @ruby_col := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'poem_lines' AND COLUMN_NAME = 'rubies'
+);
+SET @ruby_ddl := IF(
+  @ruby_col = 0,
+  'ALTER TABLE `poem_lines` ADD COLUMN `rubies` LONGTEXT NULL',
+  'SELECT 1'
+);
+PREPARE stmt_ruby FROM @ruby_ddl;
+EXECUTE stmt_ruby;
+DEALLOCATE PREPARE stmt_ruby;
+
 -- 已有库升级：users 增加登录凭证。可重复执行。
 SET @col_exists := (
   SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -213,8 +228,10 @@ INSERT INTO `app_settings` (`name`, `value`)
 SELECT 'member_month_price', '600'
 WHERE NOT EXISTS (SELECT 1 FROM `app_settings` WHERE `name` = 'member_month_price');
 
--- 商户号也可写在这里。该小程序类目不能绑定云托管支付，实际扣款走微信支付 API v3。
--- INSERT INTO `app_settings` (`name`, `value`) VALUES ('wx_mch_id', '你的商户号');
+-- 虚拟支付配置也可写在这里。道具价格必须与 member_month_price 一致，单位分。
+-- INSERT INTO `app_settings` (`name`, `value`) VALUES ('vp_offer_id', '基础配置里的 OfferID');
+-- INSERT INTO `app_settings` (`name`, `value`) VALUES ('vp_app_key', '现网 AppKey');
+-- INSERT INTO `app_settings` (`name`, `value`) VALUES ('vp_product_id', '会员道具 ID');
 
 -- 会员充值订单。支付成功后才把 status 改为 paid 并延长会员。
 CREATE TABLE IF NOT EXISTS `member_orders` (

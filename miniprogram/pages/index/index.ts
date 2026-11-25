@@ -1,7 +1,7 @@
 import { request } from '../../utils/request';
 import { ensureLogin } from '../../utils/auth';
 import { localReadIds, saveReadIds } from '../../utils/history';
-import { loadCommentEnabled } from '../../utils/flags';
+import { loadAudioEnabled, loadCommentEnabled } from '../../utils/flags';
 import { BASE_URL } from '../../config';
 
 // 未读不足这个数量（或已经全部读完）时，首页不再按阅读历史剔除。
@@ -94,6 +94,7 @@ Page({
     total: 0,
     circular: false,
     commentEnabled: false,
+    audioEnabled: false,
     swiperDuration: 320,
     preloadSrcs: [] as string[],
   },
@@ -124,6 +125,7 @@ Page({
   onShow() {
     this.setData({ greet: greeting() });
     loadCommentEnabled().then((on) => this.setData({ commentEnabled: on }));
+    loadAudioEnabled().then((on) => this.setData({ audioEnabled: on }));
     // 从详情、诗库或其他页面回来时，屏幕上的这首诗保持不动。
     if (this.data.hero && this.data.poems && this.data.poems.length) return;
     if (!this._firstLoad) this.loadHome(true);

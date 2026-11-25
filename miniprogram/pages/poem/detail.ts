@@ -1,7 +1,7 @@
 import { request } from '../../utils/request';
 import { ensureLogin } from '../../utils/auth';
 import { rememberRead } from '../../utils/history';
-import { loadCommentEnabled } from '../../utils/flags';
+import { loadAudioEnabled, loadCommentEnabled } from '../../utils/flags';
 import { ensureAskCredit } from '../../utils/askAd';
 import { BASE_URL } from '../../config';
 
@@ -21,6 +21,50 @@ function lvTier(level: number): string {
 function toFull(u: string) {
   if (!u) return '';
   return /^https?:/.test(u) ? u : BASE_URL + u;
+}
+
+function sentenceRows(lines: any[]) {
+  const rows: any[] = [];
+  let buf: any[] = [];
+  const flush = () => {
+    if (!buf.length) return;
+    const text = buf.map((l) => String(l.text || '')).join('');
+    const rubies = buf.reduce((all: any[], l) => all.concat(l.rubies || []), []);
+    const layout = lineLayout(text, rubies);
+    const notes = buf.map((l) => String(l.noteBody || '').trim()).filter(Boolean);
+    rows.push({
+      id: buf[0].id || rows.length,
+      text: layout.text,
+      chars: layout.chars,
+      showPy: layout.showPy,
+      fontSize: layout.fontSize,
+      noteBody: notes.join('<br/><br/>'),
+      noteSrc: buf.map((l) => String(l.noteSrc || '').trim()).filter(Boolean)[0] || '',
+    });
+    buf = [];
+  };
+  lines.forEach((l, i) => {
+    buf.push(l);
+    const t = String(l.text || '').trim();
+    if (/[。？！]$/.test(t) || i === lines.length - 1) flush();
+  });
+  return rows;
+}
+
+function lineLayout(text: string, rubies: any[]) {
+  const marks = (Array.isArray(rubies) ? rubies : []).map((r) => ({
+    char: String((r && r.char) || ''),
+    py: String((r && r.py) || ''),
+    used: false,
+  }));
+  const chars = Array.from(String(text || '')).map((ch, i) => {
+    const hit = marks.find((m) => !m.used && m.char === ch && m.py);
+    if (hit) hit.used = true;
+    return { i, ch, py: hit ? hit.py : '' };
+  });
+  const n = Math.max(chars.length, 1);
+  const fontSize = Math.max(26, Math.min(38, Math.floor(620 / (n * 1.06))));
+  return { chars, text: chars.map((c) => c.ch).join(''), showPy: chars.some((c) => c.py), fontSize };
 }
 
 function userAskPrompts(poem: any) {
@@ -59,6 +103,7 @@ Page({
     hasIntent: false,
     hasWu: false,
     commentEnabled: false,
+    audioEnabled: false,
     isMember: false,
     authorChar: '诗',
     askInput: '',
@@ -140,6 +185,7 @@ Page({
     // 开始计阅读时长；每次展示都刷新评论，开通会员后历史评论能立刻带上皇冠。
     this._readStart = Date.now();
     if (this.data.id && this.data.commentEnabled) this.fetchComments();
+    loadAudioEnabled().then((on) => this.setData({ audioEnabled: on }));
     this.refreshMember();
     this.loadAskCredit();
   },
@@ -370,8 +416,12 @@ Page({
   },
 
   fetchPoem() {
-    Promise.all([request<any>({ url: '/poems/' + this.data.id }), loadCommentEnabled()]).then(([poem, commentEnabled]) => {
+    Promise.all([request<any>({ url: '/poems/' + this.data.id }), loadCommentEnabled(), loadAudioEnabled()]).then(([poem, commentEnabled, audioEnabled]) => {
       const lines = ((poem && poem.lines) || []).filter((l: any) => String(l.text || '').trim());
+      if (poem) {
+        poem.lines = lines;
+        poem.rows = sentenceRows(lines);
+      }
       if (!lines.length && !String((poem && poem.firstVerse) || '').trim()) {
         wx.showToast({ title: '这首诗暂无原文', icon: 'none' });
         setTimeout(() => wx.navigateBack(), 400);
@@ -388,12 +438,12 @@ Page({
       if (hasScene) menus.push({ key: 'scene', label: '创作现场' });
       if (hasIntent) menus.push({ key: 'intent', label: '创作意图' });
       if (hasWu) menus.push({ key: 'wu', label: '解析' });
-      const keep = menus.some((m) => m.key === this.data.panel);
-      const panel = keep ? this.data.panel : menus[0].key;
+      const panel = hasScene ? 'scene' : 'note';
 
       this.setData({
         poem,
         commentEnabled,
+        audioEnabled,
         hasTrans,
         hasScene,
         hasIntent,
@@ -424,7 +474,8 @@ Page({
           }
         }
         if (idx < 0) idx = poem.lines.length > 1 ? 1 : 0;
-        this.pickLineByIndex(idx);
+        const rowIdx = Math.max(0, (poem.rows || []).findIndex((r: any) => String(r.text || '').indexOf(String(poem.lines[idx].text || '').trim()) >= 0));
+        this.pickLineByIndex(rowIdx, true);
       }
     });
   },
@@ -433,13 +484,14 @@ Page({
   pickLine(e: any) {
     this.pickLineByIndex(e.currentTarget.dataset.idx);
   },
-  pickLineByIndex(idx: number) {
-    const line = this.data.poem.lines[idx];
-    this.setData({
+  pickLineByIndex(idx: number, keepPanel?: boolean) {
+    const line = (this.data.poem.rows || this.data.poem.lines)[idx];
+    const data: any = {
       activeLine: idx,
-      panel: 'note',
       note: { text: line.text, body: line.noteBody, src: line.noteSrc },
-    });
+    };
+    if (!keepPanel) data.panel = 'note';
+    this.setData(data);
   },
 
   askText(e: any) {
@@ -764,42 +816,25 @@ Page({
     if (key) this.setData({ shareTheme: key });
   },
 
-  // 诗签用当前这句。词按短句补全整句，例如「大雨落幽燕」要带上「白浪滔天」。
+  // 诗签只用当前这一整句，不拿相邻半句去拼。
   pickShareLines() {
     const poem = this.data.poem || {};
-    const raw = ((poem.lines || []) as any[]).map((l) => String(l.text || '').trim()).filter(Boolean);
     const phrases = (s: string) =>
       String(s || '')
         .replace(/\s+/g, '')
         .split(/[，、；。！？,;!?]/)
         .map((p) => p.replace(/[「」“”''《》]/g, ''))
         .filter(Boolean);
-    const han = (s: string) => (s.match(/[\u4e00-\u9fff]/g) || []).length;
-    const verse = phrases(poem.firstVerse || '');
+    const rows = (poem.rows || []) as any[];
     let i = Number(this.data.activeLine || 0);
-    if (i < 0 || i >= raw.length) i = 0;
-    const parts = phrases(raw[i] || '');
-    if (!parts.length) return verse.slice(0, 2);
-    if (parts.length >= 2) return parts.slice(0, 2);
-    if (verse.length >= 2 && verse.indexOf(parts[0]) >= 0) return verse.slice(0, 2);
-
-    const prev = phrases(raw[i - 1] || '')[0] || '';
-    const next = phrases(raw[i + 1] || '')[0] || '';
-    const h = han(parts[0]);
-    const hp = han(prev);
-    const hn = han(next);
-    const ci = /词|曲|令/.test(poem.form || '');
-    if (ci) {
-      if (h <= 5 && hp >= 6) return [prev, parts[0]];
-      if (h <= 5 && hn > 0 && hn <= 5) return [parts[0], next];
-      if (h >= 6 && hn > 0 && hn <= 5) return [parts[0], next];
-      if (h <= 5 && hp > 0 && hp <= 5 && (hn === 0 || hn > 5)) return [prev, parts[0]];
-      return [parts[0]];
-    }
-    const couplet = (a: number, b: number) => (a === 5 && b === 5) || (a === 7 && b === 7);
-    if (couplet(h, hn)) return [parts[0], next];
-    if (couplet(hp, h)) return [prev, parts[0]];
-    return [parts[0]];
+    if (i < 0 || i >= rows.length) i = 0;
+    const sentence = rows[i] ? String(rows[i].text || '') : '';
+    const parts = phrases(sentence);
+    if (parts.length >= 2) return [parts[0], parts.slice(1).join('')];
+    if (parts.length === 1) return parts;
+    const verse = phrases(poem.firstVerse || '');
+    if (verse.length >= 2) return [verse[0], verse.slice(1).join('')];
+    return verse;
   },
 
   pickShareQuote() {

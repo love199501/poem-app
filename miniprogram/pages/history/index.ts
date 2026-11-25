@@ -8,19 +8,16 @@ Page({
   },
 
   onShow() {
+    this.setData({ open: '' });
     this.load();
   },
 
   load() {
-    const keep = this.data.open;
-    const had = (this.data.dynasties || []).length > 0;
     request<any>({ url: '/history' })
       .then((res) => {
-        const dynasties = res.dynasties || [];
-        const still = dynasties.some((d: any) => d.name === keep);
         this.setData({
-          dynasties,
-          open: still ? keep : had ? keep : dynasties.length ? dynasties[0].name : '',
+          dynasties: res.dynasties || [],
+          open: '',
           loading: false,
         });
       })

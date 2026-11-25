@@ -76,17 +76,18 @@ type Config struct {
 	ImgSize    string // 如 1024x1024
 	ImgSearch  string // 插画检索：baidu / off
 
-	WechatAppID     string // 微信小程序 AppID（配置后走真实 jscode2session）
-	WechatSecret    string // 微信小程序 AppSecret
-	WxMchID         string // 微信支付商户号
-	WxMchSerial     string // 商户 API 证书序列号
-	WxMchPrivateKey string // 商户私钥 PEM，或私钥文件路径
-	WxAPIv3Key      string // 微信支付 APIv3 密钥，32 位
-	WxPayNotifyURL  string // 支付结果回调地址
-	RewardAdUnit    string // 激励视频广告位 ID，如 adunit-xxxx
+	WechatAppID  string // 微信小程序 AppID（配置后走真实 jscode2session）
+	WechatSecret string // 微信小程序 AppSecret
+	VpOfferID    string // 虚拟支付 OfferID
+	VpAppKey     string // 虚拟支付现网 AppKey
+	VpProductID  string // 会员道具 ID
+	VpEnv        int    // 0 正式，1 沙箱。iOS 不支持沙箱
+	RewardAdUnit string // 激励视频广告位 ID，如 adunit-xxxx
 
 	// CommentEnabled 评论云控。审核期间设为 false 隐藏入口；过审后改为 true，无需再发版。
 	CommentEnabled bool
+	// AudioEnabled 在线播放云控。未取得额外资质时设为 false，隐藏朗诵入口。
+	AudioEnabled bool
 }
 
 func firstEnv(keys ...string) string {
@@ -197,16 +198,16 @@ func Load() *Config {
 		ImgSize:    getenv("IMG_SIZE", "1024x1024"),
 		ImgSearch:  getenv("IMG_SEARCH", "baidu"),
 
-		WechatAppID:     getenv("WECHAT_APPID", ""),
-		WechatSecret:    getenv("WECHAT_SECRET", ""),
-		WxMchID:         firstEnv("WX_MCH_ID", "WECHAT_MCH_ID", "MCH_ID"),
-		WxMchSerial:     getenv("WX_MCH_CERT_SERIAL", ""),
-		WxMchPrivateKey: getenv("WX_MCH_PRIVATE_KEY", ""),
-		WxAPIv3Key:      getenv("WX_API_V3_KEY", ""),
-		WxPayNotifyURL:  getenv("WX_PAY_NOTIFY_URL", "https://golang-iyjf-344746-6-1528738627.sh.run.tcloudbase.com/api/pay/notify"),
-		RewardAdUnit:    getenv("REWARD_AD_UNIT", ""),
+		WechatAppID:  getenv("WECHAT_APPID", ""),
+		WechatSecret: getenv("WECHAT_SECRET", ""),
+		VpOfferID:    firstEnv("WX_VP_OFFER_ID", "VP_OFFER_ID"),
+		VpAppKey:     firstEnv("WX_VP_APP_KEY", "VP_APP_KEY"),
+		VpProductID:  firstEnv("WX_VP_PRODUCT_ID", "VP_PRODUCT_ID"),
+		VpEnv:        getenvInt("WX_VP_ENV", 0),
+		RewardAdUnit: getenv("REWARD_AD_UNIT", ""),
 
 		CommentEnabled: envBool("COMMENT_ENABLED", false),
+		AudioEnabled:   envBool("AUDIO_ENABLED", false),
 	}
 }
 

@@ -1,5 +1,5 @@
 import { request } from '../../utils/request';
-import { ensureLogin } from '../../utils/auth';
+import { clearLogin, ensureLogin } from '../../utils/auth';
 import { loadCommentEnabled } from '../../utils/flags';
 import { API, BASE_URL } from '../../config';
 
@@ -25,6 +25,35 @@ function profileReady(u: any): boolean {
   if (!u) return false;
   const nick = String(u.nickname || '').trim();
   return nick !== '' && nick !== '诗友' && !!u.avatarUrl && !!u.phone;
+}
+
+function virtualPayFailText(err: any, platform: string): { toast: string; modal: string } {
+  const code = Number(err && err.errCode);
+  const raw = String((err && err.errMsg) || '');
+  const known: Record<number, string> = {
+    [-15005]: '登录签名错误，请退出后重新登录再试',
+    [-15006]: '支付签名错误，请确认使用的是现网 AppKey',
+    [-15007]: '登录已过期，请重试',
+    [-15010]: '会员道具还没发布',
+    [-15011]: 'iOS 不能使用沙箱支付，请改为现网环境',
+    [-15013]: '会员价格和虚拟支付后台的道具价格不一致',
+    [-15014]: '道具刚发布还未生效，请约 10 分钟后再试',
+    [-15016]: '支付参数格式有误',
+    [-15001]: '支付参数有误',
+    [1001]: '支付参数有误',
+  };
+  if (known[code]) return { toast: '', modal: known[code] };
+  if (code === -2 || raw.indexOf('cancel') >= 0) {
+    if (platform === 'ios') {
+      return {
+        toast: '',
+        modal: '没能拉起 Apple 支付。请确认微信已到 8.0.68、系统是 iOS 15 及以上，并使用中国大陆 App Store 账号。小程序还需要在虚拟支付基础配置里填写简称。',
+      };
+    }
+    return { toast: '已取消支付', modal: '' };
+  }
+  const detail = raw.replace(/^requestVirtualPayment:fail\s*/, '').trim();
+  return { toast: '', modal: detail || '暂时无法拉起支付' };
 }
 
 function canSheetClaim(u: any, nick: string): boolean {
@@ -77,6 +106,18 @@ Page({
     loadCommentEnabled().then((on) => this.setData({ commentEnabled: on }));
     this.fetchMe();
     this.fetchTasks();
+  },
+
+  tapLogin() {
+    clearLogin();
+    ensureLogin(true).then((uid) => {
+      if (!uid) {
+        wx.showToast({ title: '登录失败', icon: 'none' });
+        return;
+      }
+      this.fetchMe();
+      this.fetchTasks();
+    });
   },
 
   fetchTasks() {
@@ -375,21 +416,43 @@ Page({
 
   confirmRecharge() {
     if (this.data.claiming) return;
+    if (typeof wx.requestVirtualPayment !== 'function') {
+      wx.showToast({ title: '请升级微信后再开通会员', icon: 'none' });
+      return;
+    }
+    const device = wx.getDeviceInfo ? wx.getDeviceInfo() : wx.getSystemInfoSync();
+    const platform = String((device && device.platform) || '');
+    if (platform === 'ios' && this.data.memberPriceFen > 0 && this.data.memberPriceFen < 100) {
+      wx.showToast({ title: 'iOS 开通会员不能低于 1 元', icon: 'none' });
+      return;
+    }
     this.setData({ claiming: true });
     ensureLogin().then((uid) => {
       if (!uid) {
         this.setData({ claiming: false });
         return;
       }
-      request<any>({ url: '/users/me/member/recharge', method: 'POST', silent: true })
+      wx.login({
+        success: (loginRes) => {
+          request<any>({
+            url: '/users/me/member/recharge',
+            method: 'POST',
+            data: { code: (loginRes && loginRes.code) || '', platform },
+            silent: true,
+          })
         .then((r) => {
-          const p = (r && r.payment) || {};
-          wx.requestPayment({
-            timeStamp: String(p.timeStamp || ''),
-            nonceStr: p.nonceStr || '',
-            package: p['package'] || '',
-            signType: p.signType || 'MD5',
-            paySign: p.paySign || '',
+          const signData = r && typeof r.signData === 'string' ? r.signData : '';
+          if (!signData || !r.paySig || !r.signature) {
+            this.setData({ claiming: false });
+            wx.showToast({ title: '支付参数有误', icon: 'none' });
+            return;
+          }
+          // 会员是虚拟商品，全终端（含 iOS）都走官方虚拟支付。signData 必须原样传入。
+          wx.requestVirtualPayment({
+            signData,
+            mode: 'short_series_goods',
+            paySig: r.paySig,
+            signature: r.signature,
             success: () => {
               request<any>({
                 url: '/users/me/member/recharge/confirm',
@@ -408,9 +471,11 @@ Page({
                   this.fetchMe();
                 });
             },
-            fail: () => {
+            fail: (err: any) => {
               this.setData({ claiming: false });
-              wx.showToast({ title: '已取消支付', icon: 'none' });
+              const tip = virtualPayFailText(err, platform);
+              if (tip.modal) wx.showModal({ title: '未能拉起支付', content: tip.modal, showCancel: false });
+              else wx.showToast({ title: tip.toast, icon: 'none' });
             },
           });
         })
@@ -418,6 +483,9 @@ Page({
           this.setData({ claiming: false });
           wx.showToast({ title: (err && err.msg) || '暂时无法充值', icon: 'none' });
         });
+        },
+        fail: () => this.setData({ claiming: false }),
+      });
     });
   },
 

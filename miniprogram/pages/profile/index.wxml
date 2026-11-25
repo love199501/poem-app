@@ -7,7 +7,11 @@
       <text wx:if="{{user.isMember}}" class="pav-crown">👑</text>
     </view>
     <view class="pinfo">
-      <view class="pn">{{user?user.nickname:'未登录'}} <text class="edit-entry" catchtap="openEdit">✎</text></view>
+      <view class="pn">
+        <text wx:if="{{user}}">{{user.nickname}}</text>
+        <text wx:else class="login-link" bindtap="tapLogin">点击登录</text>
+        <text wx:if="{{user}}" class="edit-entry" catchtap="openEdit">✎</text>
+      </view>
       <view wx:if="{{user}}" class="p-ids">
         <view class="pbadge {{badgeTier}}" bindtap="openRanks">
           <text class="lv">Lv.{{user.level}}</text>
@@ -16,7 +20,7 @@
         </view>
         <text wx:if="{{user.isMember}}" class="crown-badge lg">👑 会员</text>
       </view>
-      <view wx:else class="ps">点击任意操作自动登录</view>
+      <view wx:else class="ps" bindtap="tapLogin">登录后查看等级、会员和任务</view>
     </view>
   </view>
 

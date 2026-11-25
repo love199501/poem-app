@@ -1,4 +1,5 @@
 import { API, BASE_URL, CLOUD_ENV, CLOUD_SERVICE, useCloud } from '../config';
+import { clearLogin, ensureLogin } from './auth';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -7,6 +8,7 @@ interface ReqOptions {
   method?: Method;
   data?: IAnyObject;
   silent?: boolean; // 为 true 时失败不弹 toast（用于乐观更新场景）
+  retried?: boolean;
 }
 
 // rawCall 底层请求：云托管模式走 wx.cloud.callContainer（自动带 openid），否则走 wx.request。
@@ -53,13 +55,25 @@ export function request<T = any>(opts: ReqOptions): Promise<T> {
         const body = res.data || {};
         if (res.statusCode >= 200 && res.statusCode < 300 && body.code === 0) {
           resolve(body.data as T);
-        } else {
-          // 把真实状态码与返回体打到控制台，便于区分 404(路由不匹配)/5xx(服务异常)等。
-          console.error('[request fail]', path, 'status=', res.statusCode, 'body=', res.data);
-          const msg = body && body.msg ? body.msg : '请求失败(' + res.statusCode + ')';
-          if (!opts.silent) wx.showToast({ title: msg, icon: 'none' });
-          reject(body);
+          return;
         }
+        const msg = body && body.msg ? body.msg : '请求失败(' + res.statusCode + ')';
+        const unauthorized = res.statusCode === 401 || msg === '未登录';
+        if (unauthorized && !opts.retried) {
+          clearLogin();
+          ensureLogin(true).then((uid) => {
+            if (!uid) {
+              if (!opts.silent) wx.showToast({ title: '登录失败', icon: 'none' });
+              reject(body);
+              return;
+            }
+            request<T>({ ...opts, retried: true }).then(resolve, reject);
+          });
+          return;
+        }
+        console.error('[request fail]', path, 'status=', res.statusCode, 'body=', res.data);
+        if (!opts.silent) wx.showToast({ title: msg, icon: 'none' });
+        reject(body);
       })
       .catch((err) => {
         console.error('[request error]', path, err);

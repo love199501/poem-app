@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -166,9 +167,10 @@ var illustGate = make(chan struct{}, 1)
 
 var illustBackfillMu sync.Mutex
 
-// StartIllustBackfill 每 3 分钟检查一次。每次各补一处：缺插画、缺诗人介绍、缺诗文原文。
+// StartIllustBackfill 每 3 分钟检查一次。每次各补一处：缺插画、缺诗人介绍、缺诗文原文、缺句读，并核对一首诗是否收全、文字是否与通行本一致。
 func (h *Handler) StartIllustBackfill() {
 	go func() {
+		log.Printf("[cron] 定时检查已启动，立即执行一轮，之后每 3 分钟一次")
 		h.fillGaps()
 		ticker := time.NewTicker(3 * time.Minute)
 		defer ticker.Stop()
@@ -180,12 +182,19 @@ func (h *Handler) StartIllustBackfill() {
 
 func (h *Handler) fillGaps() {
 	if !illustBackfillMu.TryLock() {
+		log.Printf("[cron] 上一轮还没结束，本轮跳过")
 		return
 	}
 	defer illustBackfillMu.Unlock()
+	start := time.Now()
+	log.Printf("[cron] 开始检查")
 	h.fillMissingIllustrations()
 	h.fillMissingPoetIntro()
 	h.fillMissingPoemContent()
+	h.fillShortPoem()
+	h.fillPunctuation()
+	h.checkPoemText()
+	log.Printf("[cron] 本轮结束，用时 %s", time.Since(start).Round(time.Second))
 }
 
 func (h *Handler) fillMissingIllustrations() {
@@ -277,7 +286,355 @@ ORDER BY id ASC LIMIT 1`).Scan(&id).Error
 	log.Printf("[poem] 已补充原文 id=%d", id)
 }
 
-var errNoPoemBody = errors.New("生成结果没有原文")
+var (
+	errNoPoemBody   = errors.New("生成结果没有原文")
+	poemSpanChecked sync.Map
+	punctChecked    sync.Map
+	poemTextChecked sync.Map
+)
+
+// fillPunctuation 每次为最新一首缺句读的诗补上标点，并给难字注音。汉字保持原样。
+func (h *Handler) fillPunctuation() {
+	type row struct {
+		ID     uint
+		Title  string
+		Author string
+	}
+	var rows []row
+	err := h.DB.Raw(`
+SELECT p.id, p.title, p.author
+FROM poems p
+WHERE p.status <> 'draft'
+AND EXISTS (
+  SELECT 1 FROM poem_lines l
+  WHERE l.poem_id = p.id
+    AND CHAR_LENGTH(TRIM(l.text)) > 0
+    AND (
+      RIGHT(TRIM(l.text), 1) NOT IN ('。','？','！','，','、','；','：')
+      OR (l.text LIKE '%兮%' AND l.text NOT LIKE '%兮，%' AND l.text NOT LIKE '%兮。%' AND l.text NOT LIKE '%兮？%' AND l.text NOT LIKE '%兮！%')
+    )
+)
+ORDER BY p.id DESC`).Scan(&rows).Error
+	if err != nil {
+		log.Printf("[poem] 查询缺句读的诗文失败: %v", err)
+		return
+	}
+	if len(rows) == 0 {
+		log.Printf("[cron] 句读：没有缺标点的诗")
+		return
+	}
+	log.Printf("[cron] 句读：待补 %d 首", len(rows))
+	client := llm.New(h.Cfg.LLMBaseURL, h.Cfg.LLMAPIKey, h.Cfg.LLMModel)
+	for _, r := range rows {
+		if _, ok := punctChecked.Load(r.ID); ok {
+			continue
+		}
+		var lines []model.PoemLine
+		if err := h.DB.Where("poem_id = ?", r.ID).Order("seq asc, id asc").Find(&lines).Error; err != nil {
+			log.Printf("[poem] 读取诗句失败 id=%d: %v", r.ID, err)
+			return
+		}
+		texts := make([]string, 0, len(lines))
+		for _, l := range lines {
+			texts = append(texts, strings.TrimSpace(l.Text))
+		}
+		if len(texts) == 0 {
+			punctChecked.Store(r.ID, true)
+			continue
+		}
+		changed := llm.NormalizePunct(lines)
+		changed = llm.EnsureReadingPunct(lines) || changed
+		if changed {
+			if !savePunctLines(h, r.ID, lines) {
+				return
+			}
+			punctChecked.Store(r.ID, true)
+			log.Printf("[poem] 已补句读 id=%d %s", r.ID, r.Title)
+			continue
+		}
+		if !client.Configured() {
+			punctChecked.Store(r.ID, true)
+			continue
+		}
+		gen, err := client.Punctuate(r.Title, r.Author, texts)
+		if err != nil {
+			log.Printf("[poem] 句读失败 %s·%s: %v", r.Title, r.Author, err)
+			punctChecked.Store(r.ID, true)
+			return
+		}
+		updated := 0
+		for i := range lines {
+			old := strings.TrimSpace(lines[i].Text)
+			neu := strings.TrimSpace(gen[i].Text)
+			if hanziOnly(old) == "" || hanziOnly(old) != hanziOnly(neu) || !hasPunct(neu) {
+				log.Printf("[poem] 句读未采用 id=%d 第%d句", r.ID, i+1)
+				continue
+			}
+			lines[i].Text = neu
+			lines[i].Rubies = cleanRubies(neu, gen[i].Rubies)
+			if err := h.DB.Save(&lines[i]).Error; err != nil {
+				log.Printf("[poem] 保存句读失败 id=%d: %v", r.ID, err)
+				return
+			}
+			updated++
+		}
+		var poem model.Poem
+		if h.DB.Select("id, first_verse").First(&poem, r.ID).Error == nil {
+			if verse := punctuatedVerse(poem.FirstVerse, lines); verse != poem.FirstVerse {
+				h.DB.Model(&model.Poem{}).Where("id = ?", r.ID).Update("first_verse", verse)
+			}
+		}
+		punctChecked.Store(r.ID, true)
+		log.Printf("[poem] 已补句读与注音 id=%d %s，%d 句", r.ID, r.Title, updated)
+		return
+	}
+}
+
+func savePunctLines(h *Handler, id uint, lines []model.PoemLine) bool {
+	for i := range lines {
+		if err := h.DB.Model(&model.PoemLine{}).Where("id = ?", lines[i].ID).Update("text", lines[i].Text).Error; err != nil {
+			log.Printf("[poem] 保存句读失败 id=%d: %v", id, err)
+			return false
+		}
+	}
+	var poem model.Poem
+	if h.DB.Select("id, first_verse").First(&poem, id).Error == nil {
+		if verse := model.CompleteDisplayVerse(poem.FirstVerse, lines); verse != poem.FirstVerse {
+			h.DB.Model(&model.Poem{}).Where("id = ?", id).Update("first_verse", verse)
+		}
+	}
+	return true
+}
+
+func linesHaveAnyPunct(lines []model.PoemLine) bool {
+	for _, l := range lines {
+		if strings.ContainsAny(l.Text, "，。？！；：、") {
+			return true
+		}
+	}
+	return false
+}
+
+func hanziOnly(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func hasPunct(s string) bool {
+	return strings.ContainsAny(s, "，。？！；：、")
+}
+
+func cleanRubies(text string, in []model.Ruby) []model.Ruby {
+	out := make([]model.Ruby, 0, len(in))
+	for _, r := range in {
+		r.Char = strings.TrimSpace(r.Char)
+		r.Py = strings.TrimSpace(r.Py)
+		if len([]rune(r.Char)) != 1 || !strings.Contains(text, r.Char) || !validPy(r.Py) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func validPy(py string) bool {
+	if py == "" || len([]rune(py)) > 8 {
+		return false
+	}
+	for _, r := range py {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case strings.ContainsRune("āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüÜńňǹ", r):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func punctuatedVerse(old string, lines []model.PoemLine) string {
+	target := hanziOnly(old)
+	if target == "" || len(lines) == 0 {
+		return old
+	}
+	acc := ""
+	han := ""
+	for _, l := range lines {
+		acc += strings.TrimSpace(l.Text)
+		han += hanziOnly(l.Text)
+		if han == target {
+			return acc
+		}
+		if len([]rune(han)) > len([]rune(target)) {
+			break
+		}
+	}
+	return old
+}
+
+// fillShortPoem 每次核对一首可能被截断的诗。全文句数明显多于库里的，就按原记录补全。
+func (h *Handler) fillShortPoem() {
+	type row struct {
+		ID     uint
+		Title  string
+		Author string
+		Form   string
+		N      int
+	}
+	var rows []row
+	err := h.DB.Raw(`
+SELECT p.id, p.title, p.author, p.form,
+  (SELECT COUNT(*) FROM poem_lines l
+    WHERE l.poem_id = p.id AND l.text IS NOT NULL AND CHAR_LENGTH(TRIM(l.text)) > 0) AS n
+FROM poems p
+WHERE p.status <> 'draft' AND p.title <> '' AND p.author <> ''
+ORDER BY p.id ASC`).Scan(&rows).Error
+	if err != nil {
+		log.Printf("[poem] 查询可能不全的诗文失败: %v", err)
+		return
+	}
+	client := llm.New(h.Cfg.LLMBaseURL, h.Cfg.LLMAPIKey, h.Cfg.LLMModel)
+	if !client.Configured() {
+		return
+	}
+	for _, r := range rows {
+		if _, ok := poemSpanChecked.Load(r.ID); ok {
+			continue
+		}
+		if r.N == 0 || strings.Contains(r.Form, "绝句") {
+			poemSpanChecked.Store(r.ID, true)
+			continue
+		}
+		count, last, err := client.PoemSpan(r.Title, r.Author)
+		if err != nil || count <= 0 {
+			log.Printf("[poem] 无法判断全文 %s·%s: %v", r.Title, r.Author, err)
+			return
+		}
+		if r.N+2 >= count {
+			poemSpanChecked.Store(r.ID, true)
+			log.Printf("[poem] 原文句数正常 id=%d %s：库内 %d 句，全文约 %d 句", r.ID, r.Title, r.N, count)
+			return
+		}
+		log.Printf("[poem] 原文可能不全 %s·%s：库内 %d 句，全文约 %d 句，末句「%s」", r.Title, r.Author, r.N, count, last)
+		if err := h.refillPoemContent(r.ID); err != nil {
+			log.Printf("[poem] 补全原文失败 id=%d: %v", r.ID, err)
+			return
+		}
+		poemSpanChecked.Store(r.ID, true)
+		log.Printf("[poem] 已补全原文 id=%d %s", r.ID, r.Title)
+		return
+	}
+}
+
+// checkPoemText 每次核对一首诗：原文是否收全，文字是否与通行本一致。错则替换原文，保留注释和互动数据。
+func (h *Handler) checkPoemText() {
+	type row struct {
+		ID     uint
+		Title  string
+		Author string
+	}
+	var rows []row
+	err := h.DB.Raw(`
+SELECT id, title, author FROM poems
+WHERE status <> 'draft' AND title <> '' AND author <> ''
+AND EXISTS (
+  SELECT 1 FROM poem_lines l
+  WHERE l.poem_id = poems.id AND CHAR_LENGTH(TRIM(l.text)) > 0
+)
+ORDER BY id DESC`).Scan(&rows).Error
+	if err != nil {
+		log.Printf("[poem] 查询待核对诗文失败: %v", err)
+		return
+	}
+	client := llm.New(h.Cfg.LLMBaseURL, h.Cfg.LLMAPIKey, h.Cfg.LLMModel)
+	if !client.Configured() {
+		return
+	}
+	for _, r := range rows {
+		if _, ok := poemTextChecked.Load(r.ID); ok {
+			continue
+		}
+		var stored []model.PoemLine
+		if err := h.DB.Where("poem_id = ?", r.ID).Order("seq asc, id asc").Find(&stored).Error; err != nil {
+			log.Printf("[poem] 读取待核对诗文失败 id=%d: %v", r.ID, err)
+			return
+		}
+		texts := make([]string, 0, len(stored))
+		for _, l := range stored {
+			if t := strings.TrimSpace(l.Text); t != "" {
+				texts = append(texts, t)
+			}
+		}
+		if len(texts) == 0 {
+			poemTextChecked.Store(r.ID, true)
+			continue
+		}
+		audit, err := client.AuditPoem(r.Title, r.Author, texts)
+		if err != nil {
+			log.Printf("[poem] 核对失败 %s·%s: %v", r.Title, r.Author, err)
+			poemTextChecked.Store(r.ID, true)
+			return
+		}
+		fresh := llm.CorrectedLines(texts, audit)
+		poemTextChecked.Store(r.ID, true)
+		if len(fresh) == 0 {
+			log.Printf("[poem] 原文核对通过 id=%d %s", r.ID, r.Title)
+			return
+		}
+		if err := h.replacePoemLines(r.ID, stored, fresh); err != nil {
+			log.Printf("[poem] 改正原文失败 id=%d: %v", r.ID, err)
+			return
+		}
+		log.Printf("[poem] 已改正原文 id=%d %s：%s", r.ID, r.Title, audit.Reason)
+		return
+	}
+}
+
+func (h *Handler) replacePoemLines(poemID uint, old []model.PoemLine, fresh []string) error {
+	byHan := map[string]model.PoemLine{}
+	for _, l := range old {
+		k := hanziOnly(l.Text)
+		if k != "" {
+			if _, ok := byHan[k]; !ok {
+				byHan[k] = l
+			}
+		}
+	}
+	rows := make([]model.PoemLine, 0, len(fresh))
+	for _, text := range fresh {
+		row := model.PoemLine{PoemID: poemID, Seq: len(rows), Text: strings.TrimSpace(text)}
+		if prev, ok := byHan[hanziOnly(text)]; ok {
+			row.NoteBody = prev.NoteBody
+			row.NoteSrc = prev.NoteSrc
+			row.Rubies = prev.Rubies
+		}
+		rows = append(rows, row)
+	}
+	llm.NormalizePunct(rows)
+	return h.DB.Transaction(func(tx *gorm.DB) error {
+		if e := tx.Where("poem_id = ?", poemID).Delete(&model.PoemLine{}).Error; e != nil {
+			return e
+		}
+		if e := tx.Create(&rows).Error; e != nil {
+			return e
+		}
+		var poem model.Poem
+		if e := tx.Select("id, first_verse").First(&poem, poemID).Error; e != nil {
+			return e
+		}
+		verse := model.CompleteDisplayVerse(poem.FirstVerse, rows)
+		if verse != poem.FirstVerse {
+			return tx.Model(&model.Poem{}).Where("id = ?", poemID).Update("first_verse", verse).Error
+		}
+		return nil
+	})
+}
 
 func poemHasBody(p *model.Poem) bool {
 	if p == nil {

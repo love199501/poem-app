@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"shijing/internal/model"
 )
@@ -26,7 +28,7 @@ func New(baseURL, apiKey, model string) *Client {
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		APIKey:  apiKey,
 		Model:   model,
-		HTTP:    &http.Client{Timeout: 90 * time.Second},
+		HTTP:    &http.Client{Timeout: 180 * time.Second},
 	}
 }
 
@@ -36,7 +38,7 @@ const systemPrompt = `你是资深中国古典诗词编辑。根据给定「诗�
  "title":"", "dynasty":"朝代简称，如唐、宋、明，不要写成唐代、宋代", "author":"", "form":"体裁如五言律诗", "yearLabel":"如 公元757年",
  "firstVerse":"最具代表性的完整一联（须含上下句，如「感时花溅泪，恨别鸟惊心。」，禁止只给半句）", "tags":["主题标签"], "moods":["忧国/思乡/旷达/孤独/喜悦 之一或多"],
  "audioUrl":"",
- "lines":[{"text":"逐句原文(一句一项)","noteBody":"字词注释，可用<b>词</b>强调","noteSrc":"注释出处"}],
+ "lines":[{"text":"逐句原文(一句一项)，句末必须有中文标点","rubies":[{"char":"生僻字","py":"pǒ"}],"noteBody":"字词注释，可用<b>词</b>强调","noteSrc":"注释出处"}],
  "translation":["逐句白话译文"], "transSource":"译文参考",
  "sceneTitle":"现场档案标题", "sceneSub":"副标题", "sceneRows":[{"icon":"📅","text":"时间/地点/处境，每条一行事实"}],
  "sceneBackground":"180到280字创作背景。写清年份与地点、作者当时的年龄与身份、这件事发生前他经历了什么、身边还有谁、落笔时他最担心或最渴望的是什么。用现代白话，让没读过史书的人也能感到他当时的状态。史实准确，不确定就写「相传」或省略，不要空泛抒情，不要逐句翻译原诗",
@@ -50,7 +52,10 @@ const systemPrompt = `你是资深中国古典诗词编辑。根据给定「诗�
  "duels":[{"side":"a","title":"观点A·xx","body":""},{"side":"b","title":"观点B·xx","body":""}],
  "aiPrompts":["3个读者会当面问作者的问题，必须用「你」称呼作者，像「你写这首诗时心里在想什么？」，以问号结尾。不要写成赏析提纲、比较题或第三人称设问"]
 }
-要求：史实准确；注释、译文可靠；对不确定内容宁缺毋滥；全部用简体中文。`
+要求：史实准确；注释、译文可靠；对不确定的背景与评论宁缺毋滥；全部用简体中文。
+原文必须完整：lines 收录该作品从第一句到最后一句的全部原文，一句一项，不得节选、不得合并两句、不得用省略号或「下略」。长篇歌行、排律、词牌、散曲也要收全。translation 与 lines 逐句对应，条数相同。
+标点只用中文 ，。？！；：。句中该停顿处用逗号，一句收束用句号；疑问用问号，感叹用叹号。不要用英文标点，不要增删汉字。兮后紧跟逗号，如「鸟嘤嘤兮，友之期。」全诗最后一句用句号、问号或叹号收束。近体诗出句用逗号、对句用句号；楚辞和汉诗不要套用这个交替。
+拼音只标生僻字、多音易错字和通假字，带声调。常见字不要标。rubies.char 必须是该句里真实出现的字。`
 
 type chatMessage struct {
 	Role    string `json:"role"`
@@ -61,6 +66,7 @@ type chatRequest struct {
 	Model          string            `json:"model"`
 	Messages       []chatMessage     `json:"messages"`
 	Temperature    float64           `json:"temperature"`
+	MaxTokens      int               `json:"max_tokens,omitempty"`
 	ResponseFormat map[string]string `json:"response_format,omitempty"`
 }
 
@@ -78,22 +84,36 @@ func (c *Client) Configured() bool { return c.APIKey != "" }
 
 // Generate 根据诗名+诗人生成结构化诗词内容。未配置 Key 时返回本地 mock。
 func (c *Client) Generate(title, author string) (*model.Poem, error) {
+	poem, err := c.generate(title, author, "")
+	if err != nil || poem == nil || !linesLookCut(poem.Lines) {
+		return poem, err
+	}
+	return c.generate(title, author, "上次结果把原文截断了。这次必须从第一句写到最后一句，禁止省略。")
+}
+
+func (c *Client) generate(title, author, extra string) (*model.Poem, error) {
 	if !c.Configured() {
 		return mockPoem(title, author), nil
 	}
-
+	user := fmt.Sprintf("诗名：%s\n诗人：%s", title, author)
+	if extra != "" {
+		user += "\n" + extra
+	}
 	reqBody := chatRequest{
 		Model: c.Model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: fmt.Sprintf("诗名：%s\n诗人：%s", title, author)},
+			{Role: "user", Content: user},
 		},
-		Temperature:    0.6,
+		Temperature:    0.4,
+		MaxTokens:      12288,
 		ResponseFormat: map[string]string{"type": "json_object"},
 	}
 	raw, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(raw))
+	ctx, cancel := context.WithTimeout(context.Background(), 170*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -126,9 +146,326 @@ func (c *Client) Generate(title, author string) (*model.Poem, error) {
 	// 以管理员输入为准，避免模型跑偏。
 	poem.Title = title
 	poem.Author = author
-	poem.FirstVerse = model.CompleteDisplayVerse(poem.FirstVerse, poem.Lines)
 	poem.Dynasty = model.NormalizeDynasty(poem.Dynasty)
+	c.ensureLinePunct(&poem)
+	poem.FirstVerse = model.CompleteDisplayVerse(poem.FirstVerse, poem.Lines)
 	return &poem, nil
+}
+
+// ensureLinePunct 模型常按无标点通行本交卷。近体诗直接补句读，其余再问一次模型，最后再校正兮和句末。
+func (c *Client) ensureLinePunct(poem *model.Poem) {
+	if poem == nil || len(poem.Lines) == 0 {
+		return
+	}
+	if !linesHavePunct(poem.Lines) && !CoupletPunct(poem.Lines) {
+		texts := make([]string, len(poem.Lines))
+		for i, l := range poem.Lines {
+			texts[i] = strings.TrimSpace(l.Text)
+		}
+		got, err := c.Punctuate(poem.Title, poem.Author, texts)
+		if err != nil {
+			for i := range poem.Lines {
+				poem.Lines[i].Text = ensureLineStop(poem.Lines[i].Text)
+			}
+		} else {
+			for i := range poem.Lines {
+				neu := strings.TrimSpace(got[i].Text)
+				if hanChars(poem.Lines[i].Text) == "" || hanChars(poem.Lines[i].Text) != hanChars(neu) || !strings.ContainsAny(neu, "，。？！；：、") {
+					poem.Lines[i].Text = ensureLineStop(poem.Lines[i].Text)
+					continue
+				}
+				poem.Lines[i].Text = neu
+				if len(poem.Lines[i].Rubies) == 0 {
+					poem.Lines[i].Rubies = got[i].Rubies
+				}
+			}
+		}
+	}
+	NormalizePunct(poem.Lines)
+}
+
+// CoupletPunct 给齐言近体补上逗号和句号：出句用逗号，对句用句号。不是齐言则不改。
+func CoupletPunct(lines []model.PoemLine) bool {
+	if len(lines) < 4 || len(lines)%2 != 0 {
+		return false
+	}
+	n := 0
+	for i, l := range lines {
+		h := hanLen(l.Text)
+		if h == 0 || strings.ContainsAny(l.Text, "，。？！；：、") {
+			return false
+		}
+		if i == 0 {
+			n = h
+			if n != 4 && n != 5 && n != 7 {
+				return false
+			}
+		} else if h != n {
+			return false
+		}
+	}
+	for i := range lines {
+		body := hanChars(lines[i].Text)
+		if i%2 == 0 {
+			lines[i].Text = body + "，"
+		} else {
+			lines[i].Text = body + "。"
+		}
+	}
+	return true
+}
+
+// EnsureReadingPunct 给还没有句末停顿的诗句补标点。齐言近体用逗号和句号交替，其余在句末补句号。
+func EnsureReadingPunct(lines []model.PoemLine) bool {
+	if CoupletPunct(lines) {
+		return true
+	}
+	changed := false
+	for i := range lines {
+		text := strings.TrimSpace(lines[i].Text)
+		if text == "" || endsWithPunct(text) {
+			continue
+		}
+		lines[i].Text = text + "。"
+		changed = true
+	}
+	return changed
+}
+
+func endsWithPunct(s string) bool {
+	rs := []rune(s)
+	if len(rs) == 0 {
+		return false
+	}
+	return isLinePunct(rs[len(rs)-1])
+}
+
+// NormalizePunct 校正已有标点：兮后要停顿，带兮的句子和全诗末句都用句号收束。
+func NormalizePunct(lines []model.PoemLine) bool {
+	changed := false
+	last := len(lines) - 1
+	for last >= 0 && strings.TrimSpace(lines[last].Text) == "" {
+		last--
+	}
+	for i := range lines {
+		next := fixLinePunct(lines[i].Text, i == last)
+		if next != lines[i].Text {
+			lines[i].Text = next
+			changed = true
+		}
+	}
+	return changed
+}
+
+func fixLinePunct(s string, last bool) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	var b strings.Builder
+	rs := []rune(s)
+	for i, r := range rs {
+		b.WriteRune(r)
+		if r == '兮' && i+1 < len(rs) && !isLinePunct(rs[i+1]) {
+			b.WriteRune('，')
+		}
+	}
+	s = b.String()
+	rs = []rune(s)
+	end := rs[len(rs)-1]
+	switch {
+	case end == '兮' && last:
+		s += "。"
+	case end == '兮':
+		s += "，"
+	case (end == '，' || end == '、' || end == '；') && (last || strings.ContainsRune(s, '兮')):
+		rs[len(rs)-1] = '。'
+		s = string(rs)
+	case strings.ContainsRune(s, '兮') && !isLinePunct(end):
+		s += "。"
+	}
+	return s
+}
+
+func isLinePunct(r rune) bool {
+	return strings.ContainsRune("，。？！；：、", r)
+}
+
+func linesHavePunct(lines []model.PoemLine) bool {
+	for _, l := range lines {
+		if strings.TrimSpace(l.Text) == "" {
+			continue
+		}
+		if !strings.ContainsAny(l.Text, "，。？！；：、") {
+			return false
+		}
+	}
+	return true
+}
+
+func ensureLineStop(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.ContainsAny(s, "，。？！；：、") {
+		return s
+	}
+	return s + "。"
+}
+
+func hanLen(s string) int {
+	n := 0
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			n++
+		}
+	}
+	return n
+}
+
+func hanChars(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func linesLookCut(lines []model.PoemLine) bool {
+	if len(lines) == 0 {
+		return false
+	}
+	last := strings.TrimSpace(lines[len(lines)-1].Text)
+	for _, mark := range []string{"省略", "下略", "余略", "未完", "以下略", "……", "..."} {
+		if strings.Contains(last, mark) {
+			return true
+		}
+	}
+	return false
+}
+
+const poemSpanSystem = `你熟悉中国古典诗词原文。给定诗名和诗人，判断这篇作品全文有多少句。
+严格只输出 JSON：{"count":全文句数,"last":"最后一句原文"}。
+句数按诵读时的一句计，不要把上下句并成一句。不要解释。`
+
+const punctSystem = `你是古籍句读编辑。给定一首诗目前没有标点的逐句原文，为每句补上规范中文标点，并为生僻字、多音易错字、通假字标注拼音。
+标点只用 ，。？！；：。句中该停顿处用逗号，一句收束用句号；疑问用问号，感叹用叹号。不要用英文标点，不要增删或改动任何汉字，不要调整句子顺序。
+兮是句中停顿，紧挨在兮后面加逗号，这一句用句号收束，如「鸟嘤嘤兮，友之期。」全诗最后一句不能停在逗号上。近体诗才是出句逗号、对句句号。
+拼音带声调，如 pǒ。常见字不要标。rubies.char 必须是该句里真实出现的字。
+严格只输出 JSON：{"lines":[{"text":"带标点的原句","rubies":[{"char":"叵","py":"pǒ"}]}]}。lines 条数和顺序必须与输入一致。`
+
+// Punctuate 为已有原文补句读，并给难字注音。不改汉字。
+func (c *Client) Punctuate(title, author string, lines []string) ([]model.PoemLine, error) {
+	if !c.Configured() || len(lines) == 0 {
+		return nil, errors.New("无法句读")
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "诗名：%s\n诗人：%s\n原文：\n", title, author)
+	for i, line := range lines {
+		fmt.Fprintf(&b, "%d. %s\n", i+1, line)
+	}
+	content, err := c.complete(punctSystem, b.String(), 0.2)
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Lines []model.PoemLine `json:"lines"`
+	}
+	if json.Unmarshal([]byte(content), &r) != nil || len(r.Lines) != len(lines) {
+		return nil, errors.New("句读结果条数不一致")
+	}
+	return r.Lines, nil
+}
+
+// PoemSpan 估计一篇作品的全文句数和最后一句，用来发现只生成了开头的诗。
+func (c *Client) PoemSpan(title, author string) (count int, last string, err error) {
+	if !c.Configured() {
+		return 0, "", nil
+	}
+	content, err := c.complete(poemSpanSystem, fmt.Sprintf("诗名：%s\n诗人：%s", title, author), 0.1)
+	if err != nil {
+		return 0, "", err
+	}
+	var r struct {
+		Count int    `json:"count"`
+		Last  string `json:"last"`
+	}
+	if json.Unmarshal([]byte(content), &r) != nil || r.Count <= 0 {
+		return 0, "", errors.New("无法判断全文句数")
+	}
+	return r.Count, strings.TrimSpace(r.Last), nil
+}
+
+const poemAuditSystem = `你核对一首已入库诗词的原文，对照该作品最通行的定本。
+只标出明确问题：缺句或只收了开头、把别的作品混进来、明显错字、把两句合成一句、把一句拆碎。
+常见选本里的异文视为正确，不要改。标点不同不算内容错误。
+严格只输出 JSON：{"complete":true,"correct":true,"reason":"","lines":[]}
+complete 或 correct 为 false 时，lines 给出从第一句到最后一句的全部原文，一句一项，带规范中文标点。两者都为 true 时 lines 必须是空数组。不要解释。`
+
+// PoemAudit 是一首诗的完整性与文字核对结果。
+type PoemAudit struct {
+	Complete bool     `json:"complete"`
+	Correct  bool     `json:"correct"`
+	Reason   string   `json:"reason"`
+	Lines    []string `json:"lines"`
+}
+
+// AuditPoem 核对库内原文是否收全、是否与通行本一致。
+func (c *Client) AuditPoem(title, author string, lines []string) (PoemAudit, error) {
+	if !c.Configured() || len(lines) == 0 {
+		return PoemAudit{}, errors.New("无法核对诗文")
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "诗名：%s\n诗人：%s\n库内原文：\n", title, author)
+	for i, line := range lines {
+		fmt.Fprintf(&b, "%d. %s\n", i+1, line)
+	}
+	content, err := c.complete(poemAuditSystem, b.String(), 0.1)
+	if err != nil {
+		return PoemAudit{}, err
+	}
+	var audit PoemAudit
+	if json.Unmarshal([]byte(content), &audit) != nil {
+		return PoemAudit{}, errors.New("核对结果无法解析")
+	}
+	return audit, nil
+}
+
+// CorrectedLines 在核对认定缺句或错字时返回可替换的全文。标点差异、更短的补全、含省略的结果都不采用。
+func CorrectedLines(old []string, audit PoemAudit) []string {
+	if audit.Complete && audit.Correct {
+		return nil
+	}
+	fresh := make([]string, 0, len(audit.Lines))
+	for _, line := range audit.Lines {
+		line = strings.TrimSpace(line)
+		if line == "" || linesLookCut([]model.PoemLine{{Text: line}}) {
+			return nil
+		}
+		fresh = append(fresh, line)
+	}
+	if len(fresh) == 0 || len(fresh) < len(old) {
+		return nil
+	}
+	if !audit.Complete && len(fresh) == len(old) {
+		return nil
+	}
+	if sameHanLines(old, fresh) {
+		return nil
+	}
+	return fresh
+}
+
+func sameHanLines(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if hanChars(a[i]) != hanChars(b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // extractJSON 容错：去掉可能的 ```json 包裹，截取第一个 { 到最后一个 }。

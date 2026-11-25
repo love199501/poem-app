@@ -20,6 +20,10 @@ import (
 // SynthesizePoemAudio 为一首诗合成「有感情的朗诵」音频并缓存。
 // 已有 audioUrl 直接返回；带 ?force=1 则忽略缓存、重新生成并覆盖（换音色/语速后用）。
 func (h *Handler) SynthesizePoemAudio(c *gin.Context) {
+	if !h.Cfg.AudioEnabled {
+		fail(c, http.StatusForbidden, "朗诵暂未开放")
+		return
+	}
 	if currentUserID(c) == 0 {
 		fail(c, http.StatusUnauthorized, "请先登录")
 		return
@@ -45,8 +49,8 @@ func (h *Handler) SynthesizePoemAudio(c *gin.Context) {
 	}
 
 	voice := tts.ChooseRecitation(poem.Author, poem.Moods, poem.Tags, text+poem.Title)
-	// 地址还在、文件或数据库里也在、音色未变，才用缓存。否则重新合成。
-	if poem.AudioURL != "" && !force && strings.Contains(poem.AudioURL, "spk="+voice.Key) && h.audioReady(poem.AudioURL) {
+	// 地址还在、文件或数据库里也在、音色和引擎都未变，才用缓存。否则重新合成。
+	if poem.AudioURL != "" && !force && h.audioMatches(poem.AudioURL, voice.Key) && h.audioReady(poem.AudioURL) {
 		ok(c, gin.H{"audioUrl": poem.AudioURL, "speaker": voice.Label})
 		return
 	}
@@ -59,7 +63,11 @@ func (h *Handler) SynthesizePoemAudio(c *gin.Context) {
 		fail(c, http.StatusServiceUnavailable, "未配置情感朗诵")
 		return
 	}
-	log.Printf("[tts] %s《%s》音色 %s（%s）语速 %d", poem.Author, poem.Title, voice.Speaker, voice.Label, voice.Rate)
+	speaker := voice.Speaker
+	if h.Cfg.TTSProvider == "cosyvoice" {
+		speaker = h.cosyVoice()
+	}
+	log.Printf("[tts] %s《%s》音色 %s（%s）语速 %d", poem.Author, poem.Title, speaker, voice.Label, voice.Rate)
 
 	audio, err := client.Synthesize(text, buildInstruction(&poem))
 	if err != nil {
@@ -83,13 +91,18 @@ func (h *Handler) SynthesizePoemAudio(c *gin.Context) {
 	}
 
 	// 带版本号，换音色/语速重新生成后能绕过小程序与缓存。
-	url := fmt.Sprintf("/audio/%s?v=%d&spk=%s", name, time.Now().Unix(), voice.Key)
+	url := fmt.Sprintf("/audio/%s?v=%d&spk=%s%s", name, time.Now().Unix(), voice.Key, h.audioEngineMark())
 	h.DB.Model(&model.Poem{}).Where("id = ?", id).Update("audio_url", url)
 	ok(c, gin.H{"audioUrl": url, "speaker": voice.Label})
 }
 
-// pickTTSFor 按这首诗选出的音色构造朗诵客户端。豆包只用 2.0 音色。
+// pickTTSFor 按这首诗选出的音色构造朗诵客户端。cosyvoice 走硅基流动。
 func (h *Handler) pickTTSFor(voice tts.Recitation) tts.Synthesizer {
+	if h.Cfg.TTSProvider == "cosyvoice" {
+		if c := h.cosyClient(voice); c != nil {
+			return c
+		}
+	}
 	if h.Cfg.TTSProvider == "azure" && h.Cfg.AzureKey != "" {
 		azVoice := "zh-CN-YunxiNeural"
 		if strings.HasPrefix(voice.Key, "f-") {
@@ -110,6 +123,53 @@ func (h *Handler) pickTTSFor(voice tts.Recitation) tts.Synthesizer {
 		return tts.NewVolcanoBig(h.Cfg.VolcBigKey, "", voice.Speaker, voice.Rate, "")
 	}
 	return nil
+}
+
+func (h *Handler) cosyClient(voice tts.Recitation) tts.Synthesizer {
+	key := strings.TrimSpace(h.Cfg.TTSAPIKey)
+	if key == "" {
+		key = strings.TrimSpace(h.Cfg.LLMAPIKey)
+	}
+	if key == "" {
+		key = strings.TrimSpace(h.Cfg.ImgAPIKey)
+	}
+	if key == "" {
+		return nil
+	}
+	base := strings.TrimSpace(h.Cfg.TTSBaseURL)
+	if base == "" || strings.Contains(base, "openai.com") {
+		base = "https://api.siliconflow.cn/v1"
+	}
+	model := strings.TrimSpace(h.Cfg.TTSModel)
+	if model == "" || !strings.Contains(strings.ToLower(model), "cosyvoice") {
+		model = tts.CosyModel
+	}
+	return tts.NewCosy(base, key, model, h.cosyVoice(), tts.CosySpeed(voice.Rate))
+}
+
+func (h *Handler) cosyVoice() string {
+	return tts.CosyVoiceName(h.Cfg.TTSModel, h.Cfg.TTSVoice)
+}
+
+func (h *Handler) audioEngineMark() string {
+	if h.Cfg.TTSProvider != "cosyvoice" {
+		return ""
+	}
+	name := h.cosyVoice()
+	if i := strings.LastIndex(name, ":"); i >= 0 {
+		name = name[i+1:]
+	}
+	return "&eng=cosyvoice&voice=" + name + "&read=3"
+}
+
+func (h *Handler) audioMatches(audioURL, key string) bool {
+	if !strings.Contains(audioURL, "spk="+key) {
+		return false
+	}
+	if h.Cfg.TTSProvider == "cosyvoice" && !strings.Contains(audioURL, h.audioEngineMark()) {
+		return false
+	}
+	return true
 }
 
 // audioReady 缓存地址对应的 mp3 在磁盘或数据库中是否还在。

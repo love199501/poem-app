@@ -23,7 +23,7 @@
           <view class="pcard-inner">
             <view class="pcard-top">
               <text class="pcard-dyn">{{item.dynasty}} · {{item.form}}</text>
-              <text wx:if="{{item.audioUrl}}" class="pcard-audio">🔊 可听</text>
+              <text wx:if="{{audioEnabled && item.audioUrl}}" class="pcard-audio">🔊 可听</text>
             </view>
             <view class="pcard-verse">
               <view class="pcard-verse-tx serif">

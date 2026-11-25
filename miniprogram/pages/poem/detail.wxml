@@ -19,8 +19,17 @@
     </view>
 
     <view class="poem-body serif">
-      <view wx:for="{{poem.lines}}" wx:key="id" data-idx="{{index}}" bindtap="pickLine"
-            class="poem-line {{activeLine===index?'active':''}}">{{item.text}}</view>
+      <view wx:for="{{poem.rows}}" wx:key="id" data-idx="{{index}}" bindtap="pickLine"
+            class="poem-line {{activeLine===index?'active':''}} {{item.showPy?'with-py':''}}"
+            style="font-size: {{item.fontSize}}rpx;">
+        <block wx:if="{{item.showPy}}">
+          <view wx:for="{{item.chars}}" wx:for-item="ch" wx:key="i" class="py-ch">
+            <text wx:if="{{ch.py}}" class="py">{{ch.py}}</text>
+            <text class="ch">{{ch.ch}}</text>
+          </view>
+        </block>
+        <text wx:else class="poem-text">{{item.text}}</text>
+      </view>
     </view>
     <view class="poem-tip">点击任意一句，查看对应注释</view>
     <view class="entry-row">
@@ -231,7 +240,8 @@
   </scroll-view>
 
   <!-- 常驻朗诵条（含收藏入口，固定占位不遮挡滚动内容） -->
-  <view class="audio-bar">
+  <view class="audio-bar {{audioEnabled?'':'actions'}}">
+    <block wx:if="{{audioEnabled}}">
     <text class="ab-play {{audio.playing?'on':''}}" catchtap="toggleAudio">{{audio.loading ? '…' : (audio.playing ? '⏸' : '▶')}}</text>
     <view class="ab-mid">
       <view class="ab-row">
@@ -240,6 +250,7 @@
       </view>
       <view class="ab-track"><view class="ab-i" style="width:{{audio.pct}}%"></view></view>
     </view>
+    </block>
     <view class="ab-fav ab-like {{liked?'on':''}}" catchtap="toggleLikePoem">
       <text class="ab-fav-ic">{{liked ? '♥' : '♡'}}</text>
       <text class="ab-fav-tx">{{liked ? '已赞' : '点赞'}}</text>

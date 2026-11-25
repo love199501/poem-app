@@ -64,6 +64,7 @@ func Setup(h *handler.Handler) *gin.Engine {
 		api.POST("/users/me/member/claim", h.ClaimMember)
 		api.POST("/users/me/member/recharge", h.RechargeMember)
 		api.POST("/users/me/member/recharge/confirm", h.ConfirmMemberPay)
+		api.GET("/pay/notify", h.PayNotifyCheck)
 		api.POST("/pay/notify", h.PayNotify)
 		api.GET("/users/me/ask-credit", h.GetAskCredit)
 		api.POST("/users/me/ask-credit", h.GrantAskCredit)

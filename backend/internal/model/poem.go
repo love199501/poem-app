@@ -58,6 +58,12 @@ type Duel struct {
 	Body  string `json:"body"`
 }
 
+// Ruby 句中需要注音的难字。
+type Ruby struct {
+	Char string `json:"char"`
+	Py   string `json:"py"`
+}
+
 // PoemLine 逐句原文 + 注释，支撑「读」里点击诗句看注释。
 type PoemLine struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
@@ -66,6 +72,7 @@ type PoemLine struct {
 	Text     string `gorm:"size:255" json:"text"`
 	NoteBody string `gorm:"type:text" json:"noteBody"`
 	NoteSrc  string `gorm:"size:255" json:"noteSrc"`
+	Rubies   []Ruby `gorm:"serializer:json" json:"rubies,omitempty"`
 }
 
 // Poem 一首诗的全部内容：元信息 + 读/境/意/悟 四段富内容。

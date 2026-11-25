@@ -18,6 +18,9 @@ func TestNormalizeDynasty(t *testing.T) {
 	if got := NormalizeDynasty("现代"); got != "近现代" {
 		t.Fatalf("现代 => %q", got)
 	}
+	if got := NormalizeDynasty("民国"); got != "近现代" {
+		t.Fatalf("民国 => %q", got)
+	}
 	if got := NormalizeDynasty("现"); got != "近现代" {
 		t.Fatalf("现 => %q", got)
 	}

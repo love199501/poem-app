@@ -25,7 +25,11 @@ func New(db *gorm.DB, cfg *config.Config) *Handler { return &Handler{DB: db, Cfg
 
 // AppConfig 给小程序的云控开关。评论入口由 COMMENT_ENABLED 决定。
 func (h *Handler) AppConfig(c *gin.Context) {
-	ok(c, gin.H{"commentEnabled": h.Cfg.CommentEnabled, "rewardAdUnit": h.Cfg.RewardAdUnit})
+	ok(c, gin.H{
+		"commentEnabled": h.Cfg.CommentEnabled,
+		"audioEnabled":   h.Cfg.AudioEnabled,
+		"rewardAdUnit":   h.Cfg.RewardAdUnit,
+	})
 }
 
 // ok / fail 统一响应格式：{code,msg,data}。

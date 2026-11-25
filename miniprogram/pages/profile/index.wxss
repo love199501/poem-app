@@ -47,6 +47,9 @@
   font-weight: 700;
   margin-bottom: 12rpx;
 }
+.login-link {
+  color: #b0392c;
+}
 /* 配色来自全局 .lv-t1…t5（等级越高越醒目），此处只定义尺寸与排版 */
 .pbadge {
   display: inline-flex;
